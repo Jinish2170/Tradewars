@@ -2,11 +2,11 @@ import io from 'socket.io-client';
 
 const SOCKET_URL = process.env.NODE_ENV === 'production' 
   ? process.env.REACT_APP_SOCKET_URL 
-  : undefined; // Let socket.io-client use the default URL with proxy
+  : 'http://localhost:4001';
 
-// Initialize socket connection
 export const socket = io(SOCKET_URL, {
-  autoConnect: true,
+  transports: ['websocket', 'polling'],
+  path: '/socket.io',
   reconnection: true,
   reconnectionAttempts: 5,
   reconnectionDelay: 1000,
