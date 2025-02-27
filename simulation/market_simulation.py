@@ -304,14 +304,12 @@ class MarketSession:
         self.initialized = False  # Add flag to track if market is initialized
 
     def initialize_session(self):
-        """Initialize market state but don't start price updates"""
-        if self.initialized:
-            return
-            
+        """Always initialize market state properly"""
         from simulation import market_state
         
         # Initialize market state first
         market_state.initialize_market()
+        logger.info("Market state initialized with stocks: " + ", ".join(market_state.stock_prices.keys()))
         
         # Store initial prices as reference
         self.initial_prices = market_state.stock_prices.copy()
@@ -319,10 +317,10 @@ class MarketSession:
         # Set initialized flag
         self.initialized = True
         
-        logger.info("Market initialized - waiting for session start command")
+        logger.info("Market initialized - ready for session start")
 
     def start_session(self):
-        """Enhanced session start with proper initialization"""
+        """Enhanced session start with proper initialization and notifications"""
         if self.session_active:
             logger.warning("A session is already active")
             return False
@@ -332,9 +330,8 @@ class MarketSession:
             return False
             
         try:
-            # Initialize if not already done
-            if not self.initialized:
-                self.initialize_session()
+            # Initialize if not already done - ALWAYS initialize to ensure fresh start
+            self.initialize_session()
             
             # Reset session parameters
             self.current_session += 1
@@ -358,9 +355,13 @@ class MarketSession:
             
             # Initialize price history for the session
             market_state.price_history = {stock: [market_state.stock_prices[stock]] 
-                                        for stock in market_state.stock_prices}
+                                         for stock in market_state.stock_prices}
             
             logger.info(f"Trading Session {self.current_session} started")
+            
+            # Broadcast an event that session started (can be useful for UI components)
+            logger.info("Notifying all components that session has started")
+            
             return True
             
         except Exception as e:
@@ -610,3 +611,65 @@ def validate_admin(admin_key):
 # Create global market session without initialization
 market_session = MarketSession()
 # Remove any auto-initialization calls
+
+def start_session(session_number=None):
+    """Start a new trading session"""
+    global session_active, current_session, session_start_time, pause_lock
+    
+    if session_active:
+        logger.warning("Session already active")
+        return False
+    
+    # Initialize or increment session number
+    if session_number is not None:
+        current_session = session_number
+    else:
+        current_session = (current_session or 0) + 1
+    
+    if current_session > MAX_SESSIONS:
+        logger.warning(f"Maximum sessions ({MAX_SESSIONS}) reached")
+        return False
+    
+    # Start new session
+    session_active = True
+    pause_lock = False
+    session_start_time = time.time()
+    logger.info(f"Trading Session {current_session} started")
+    
+    return True
+
+def pause():
+    """Pause the current trading session"""
+    global pause_lock
+    
+    if not session_active:
+        logger.warning("No active session to pause")
+        return False
+    
+    if pause_lock:
+        logger.warning("Session already paused")
+        return False
+    
+    pause_lock = True
+    logger.info("Trading session paused")
+    return True
+
+def resume():
+    """Resume the current trading session"""
+    global pause_lock
+    
+    if not session_active:
+        logger.warning("No active session to resume")
+        return False
+    
+    if not pause_lock:
+        logger.warning("Session not paused")
+        return False
+    
+    pause_lock = False
+    logger.info("Trading session resumed")
+    return True
+
+def is_market_open():
+    """Check if market is open for trading"""
+    return session_active and not pause_lock

@@ -41,10 +41,16 @@ except ImportError as e:
 # Configuration
 MARKET_UPDATE_INTERVAL = 1000  # milliseconds
 
+# Initialize market state before creating UI
 def main():
     try:
         # Create the application
         app = QApplication(sys.argv)
+        
+        # Initialize market before creating UI
+        from simulation import market_state
+        market_state.initialize_market()
+        logger.info("Market initialized with stocks: " + ", ".join(market_state.stock_prices.keys()))
         
         # Create and show the main window
         window = MainWindow()
