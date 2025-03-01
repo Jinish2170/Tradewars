@@ -175,10 +175,25 @@ class ModernPriceWidget(QFrame):
             glow.setOffset(0, 0)
             self.price_label.setGraphicsEffect(glow)
             
-            # Clear effect after animation
-            QTimer.singleShot(1000, lambda: self.price_label.setGraphicsEffect(None))
+            # Create a safer way to clear the effect
+            # Store a reference to the label in a local variable
+            label = self.price_label
+            timer = QTimer(self)
+            timer.setSingleShot(True)
+            timer.timeout.connect(lambda: self._safe_clear_effect(label))
+            timer.start(1000)
         
         self.last_price = new_price
+
+    # Add a helper method to safely clear the graphics effect
+    def _safe_clear_effect(self, widget):
+        """Safely clear graphics effect if widget still exists"""
+        try:
+            if widget and widget.isVisible():
+                widget.setGraphicsEffect(None)
+        except RuntimeError:
+            # Widget was already deleted, nothing to do
+            pass
 
 # Market status bar showing market state and current session
 class MarketStatusBar(QFrame):
@@ -370,62 +385,63 @@ class ParticipantView(QWidget):
         
         market_tab_layout.addWidget(self.market_table)
         
-        # Portfolio tab
-        portfolio_tab = QWidget()
-        portfolio_layout = QVBoxLayout(portfolio_tab)
-        portfolio_layout.setContentsMargins(15, 15, 15, 15)
-        portfolio_layout.setSpacing(15)
+        # Replace Portfolio tab with Team Performance tab
+        team_performance_tab = QWidget()
+        team_layout = QVBoxLayout(team_performance_tab)
+        team_layout.setContentsMargins(15, 15, 15, 15)
+        team_layout.setSpacing(15)
         
-        # Portfolio summary cards
-        cards_layout = QHBoxLayout()
-        cards_layout.setSpacing(12)
+        # Market summary cards
+        summary_layout = QHBoxLayout()
+        summary_layout.setSpacing(12)
         
-        self.cash_card = SummaryCard("Available Cash", "$100,000", THEME['accent'])
-        self.portfolio_value_card = SummaryCard("Portfolio Value", "$100,000", THEME['text'])
-        self.profit_loss_card = SummaryCard("Profit/Loss", "$0.00", THEME['positive'])
+        # Create market statistics cards instead of portfolio cards
+        self.best_team_card = SummaryCard("Best Team", "Team 0", THEME['accent'])
+        self.avg_value_card = SummaryCard("Average Value", "$100,000", THEME['text'])
+        self.market_activity_card = SummaryCard("Market Activity", "Low", THEME['neutral'])
         
-        cards_layout.addWidget(self.cash_card)
-        cards_layout.addWidget(self.portfolio_value_card)
-        cards_layout.addWidget(self.profit_loss_card)
+        summary_layout.addWidget(self.best_team_card)
+        summary_layout.addWidget(self.avg_value_card)
+        summary_layout.addWidget(self.market_activity_card)
         
-        portfolio_layout.addLayout(cards_layout)
+        team_layout.addLayout(summary_layout)
         
-        # Holdings table
-        holdings_frame = QFrame()
-        holdings_frame.setObjectName("Card")
-        holdings_frame.setStyleSheet(CARD_STYLE)
+        # Team performance table
+        teams_frame = QFrame()
+        teams_frame.setObjectName("Card")
+        teams_frame.setStyleSheet(CARD_STYLE)
         
-        holdings_layout = QVBoxLayout(holdings_frame)
-        holdings_layout.setContentsMargins(15, 12, 15, 12)
+        teams_layout = QVBoxLayout(teams_frame)
+        teams_layout.setContentsMargins(15, 12, 15, 12)
         
-        # Holdings header
-        holdings_header = QHBoxLayout()
-        holdings_title = QLabel("Current Holdings")
-        holdings_title.setStyleSheet(f"color: {THEME['text']}; font-size: 16px; font-weight: bold;")
-        holdings_header.addWidget(holdings_title)
-        holdings_layout.addLayout(holdings_header)
+        # Teams header
+        teams_header = QHBoxLayout()
+        teams_title = QLabel("Team Rankings")
+        teams_title.setStyleSheet(f"color: {THEME['text']}; font-size: 16px; font-weight: bold;")
+        teams_header.addWidget(teams_title)
+        teams_layout.addLayout(teams_header)
         
-        # Holdings table
-        self.holdings_table = QTableWidget()
-        self.holdings_table.setColumnCount(5)
-        self.holdings_table.setHorizontalHeaderLabels(["Symbol", "Quantity", "Avg Cost", "Current", "P/L"])
-        self.holdings_table.setStyleSheet(MODERN_TABLE_STYLE)
-        self.holdings_table.setAlternatingRowColors(True)
-        self.holdings_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.holdings_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        # Team rankings table
+        self.teams_table = QTableWidget()
+        self.teams_table.setColumnCount(5)
+        self.teams_table.setHorizontalHeaderLabels(["Team", "Cash", "Holdings Value", "Total Value", "% Change"])
+        self.teams_table.setStyleSheet(MODERN_TABLE_STYLE)
+        self.teams_table.setAlternatingRowColors(True)
+        self.teams_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.teams_table.setEditTriggers(QTableWidget.NoEditTriggers)
         
-        holdings_layout.addWidget(self.holdings_table)
+        teams_layout.addWidget(self.teams_table)
         
-        # Action log
+        # Market transactions log
         log_layout = QVBoxLayout()
-        log_title = QLabel("Activity Log")
+        log_title = QLabel("Recent Market Activity")
         log_title.setStyleSheet(f"color: {THEME['text']}; font-size: 16px; font-weight: bold;")
         log_layout.addWidget(log_title)
         
-        self.action_log = QTextEdit()
-        self.action_log.setReadOnly(True)
-        self.action_log.setFixedHeight(120)
-        self.action_log.setStyleSheet(f"""
+        self.market_log = QTextEdit()
+        self.market_log.setReadOnly(True)
+        self.market_log.setFixedHeight(120)
+        self.market_log.setStyleSheet(f"""
             QTextEdit {{
                 background-color: {THEME['header']};
                 color: {THEME['text']};
@@ -435,15 +451,15 @@ class ParticipantView(QWidget):
                 padding: 8px;
             }}
         """)
-        log_layout.addWidget(self.action_log)
+        log_layout.addWidget(self.market_log)
         
-        holdings_layout.addLayout(log_layout)
+        teams_layout.addLayout(log_layout)
         
-        portfolio_layout.addWidget(holdings_frame)
+        team_layout.addWidget(teams_frame)
         
         # Add tabs to tab widget
         content_tabs.addTab(market_tab, "Market Data")
-        content_tabs.addTab(portfolio_tab, "My Portfolio")
+        content_tabs.addTab(team_performance_tab, "Team Rankings")  # Changed tab name
         
         main_layout.addWidget(content_tabs, 1)  # Give it stretch factor for responsive sizing
         
@@ -494,8 +510,8 @@ class ParticipantView(QWidget):
             # Update market table
             self.update_market_table(market_data)
             
-            # Update portfolio information (team 0 for example)
-            self.update_portfolio_view()
+            # Update team performance data
+            self.update_team_performance()
             
             # Update market status
             status = market_session.get_session_status()
@@ -559,84 +575,160 @@ class ParticipantView(QWidget):
             self.market_table.setItem(row, 4, volume_item)
             self.market_table.setItem(row, 5, available_item)
     
-    def update_portfolio_view(self):
-        """Update portfolio view with current holdings data"""
+    def update_team_performance(self):
+        """Update team performance data"""
         try:
-            # Get portfolio data for team 0
-            portfolio = market_state.get_team_portfolio(0)
+            all_teams_data = []
+            best_team = 0
+            best_performance = 0
+            total_value = 0
+            total_transactions = 0
+            
+            # Get data for all teams
+            for team_id in range(market_state.TEAM_COUNT):
+                try:
+                    portfolio = market_state.get_team_portfolio(team_id)
+                    
+                    # Calculate performance metrics
+                    initial_value = market_state.STARTING_BUDGET
+                    profit_loss = portfolio['total_value'] - initial_value
+                    profit_percent = (profit_loss / initial_value) * 100 if initial_value > 0 else 0
+                    
+                    # Track best performing team
+                    if profit_percent > best_performance:
+                        best_performance = profit_percent
+                        best_team = team_id
+                    
+                    # Add to totals for averages
+                    total_value += portfolio['total_value']
+                    if 'transactions' in portfolio:
+                        total_transactions += len(portfolio['transactions'])
+                    
+                    # Add to team data collection
+                    all_teams_data.append({
+                        'team_id': team_id,
+                        'cash': portfolio['cash'],
+                        'holdings_value': portfolio['holdings_value'],
+                        'total_value': portfolio['total_value'],
+                        'profit_percent': profit_percent
+                    })
+                except Exception as e:
+                    logger.error(f"Error getting portfolio for team {team_id}: {str(e)}")
+            
+            # Calculate averages
+            avg_value = total_value / market_state.TEAM_COUNT if market_state.TEAM_COUNT > 0 else 0
+            
+            # Determine market activity level
+            if total_transactions > 50:
+                activity = "High"
+                activity_color = THEME['positive']
+            elif total_transactions > 20:
+                activity = "Medium"
+                activity_color = THEME['accent']
+            else:
+                activity = "Low"
+                activity_color = THEME['neutral']
             
             # Update summary cards
-            self.cash_card.update_value(f"${portfolio['cash']:,.2f}")
-            self.portfolio_value_card.update_value(f"${portfolio['total_value']:,.2f}")
+            best_team_text = f"Team {best_team} (+{best_performance:.1f}%)"
+            self.best_team_card.update_value(best_team_text, THEME['positive'] if best_performance > 0 else THEME['negative'])
+            self.avg_value_card.update_value(f"${avg_value:,.2f}")
+            self.market_activity_card.update_value(activity, activity_color)
             
-            # Calculate profit/loss
-            initial_value = market_state.STARTING_BUDGET
-            profit_loss = portfolio['total_value'] - initial_value
-            profit_percent = (profit_loss / initial_value) * 100 if initial_value > 0 else 0
+            # Sort teams by total value (descending)
+            all_teams_data.sort(key=lambda x: x['total_value'], reverse=True)
             
-            profit_text = f"${profit_loss:,.2f} ({profit_percent:+.2f}%)"
-            profit_color = THEME['positive'] if profit_loss >= 0 else THEME['negative']
-            self.profit_loss_card.update_value(profit_text, profit_color)
-            
-            # Update holdings table
-            holdings = portfolio['holdings']
-            self.holdings_table.setRowCount(len(holdings))
-            
-            for row, (symbol, quantity) in enumerate(holdings.items()):
-                # Symbol
-                symbol_item = QTableWidgetItem(symbol)
+            # Update team table
+            self.teams_table.setRowCount(len(all_teams_data))
+            for row, team_data in enumerate(all_teams_data):
+                # Team ID with rank
+                team_item = QTableWidgetItem(f"Team {team_data['team_id']}")
+                if row < 3:  # Top 3 teams get special formatting
+                    team_item.setForeground(QColor(THEME['accent']))
+                    font = team_item.font()
+                    font.setBold(True)
+                    team_item.setFont(font)
                 
-                # Quantity
-                quantity_item = QTableWidgetItem(f"{quantity:,}")
-                quantity_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                # Cash
+                cash_item = QTableWidgetItem(f"${team_data['cash']:,.2f}")
+                cash_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 
-                # Average cost - using 0 as placeholder since it's not tracked
-                avg_cost = 0
-                avg_cost_item = QTableWidgetItem("$0.00")
-                avg_cost_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                # Holdings value
+                holdings_item = QTableWidgetItem(f"${team_data['holdings_value']:,.2f}")
+                holdings_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 
-                # Current price
-                current_price = market_state.stock_prices.get(symbol, 0)
-                current_price_item = QTableWidgetItem(f"${current_price:,.2f}")
-                current_price_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                # Total value
+                total_item = QTableWidgetItem(f"${team_data['total_value']:,.2f}")
+                total_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 
-                # Profit/Loss
-                position_pl = (current_price - avg_cost) * quantity
-                pl_item = QTableWidgetItem(f"${position_pl:,.2f}")
-                pl_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                # Percent change
+                percent = team_data['profit_percent']
+                percent_item = QTableWidgetItem(f"{percent:+.2f}%")
+                percent_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
                 
-                if position_pl > 0:
-                    pl_item.setForeground(QColor(THEME['positive']))
-                elif position_pl < 0:
-                    pl_item.setForeground(QColor(THEME['negative']))
+                if percent > 0:
+                    percent_item.setForeground(QColor(THEME['positive']))
+                elif percent < 0:
+                    percent_item.setForeground(QColor(THEME['negative']))
                 
                 # Add items to table
-                self.holdings_table.setItem(row, 0, symbol_item)
-                self.holdings_table.setItem(row, 1, quantity_item)
-                self.holdings_table.setItem(row, 2, avg_cost_item)
-                self.holdings_table.setItem(row, 3, current_price_item)
-                self.holdings_table.setItem(row, 4, pl_item)
+                self.teams_table.setItem(row, 0, team_item)
+                self.teams_table.setItem(row, 1, cash_item)
+                self.teams_table.setItem(row, 2, holdings_item)
+                self.teams_table.setItem(row, 3, total_item)
+                self.teams_table.setItem(row, 4, percent_item)
             
-            # Update action log with recent transactions
-            if 'transactions' in portfolio and portfolio['transactions']:
-                recent = portfolio['transactions'][0]  # Most recent transaction
-                
-                # Format message based on transaction type
-                if recent['type'] == 'buy':
-                    msg = f"Bought {recent['quantity']} shares of {recent['stock']} at ${recent['price']:.2f}"
-                elif recent['type'] == 'sell':
-                    msg = f"Sold {recent['quantity']} shares of {recent['stock']} at ${recent['price']:.2f}"
-                else:
-                    msg = f"Transaction: {recent['type']} {recent['quantity']} {recent['stock']}"
-                
-                # Add timestamp
-                timestamp = time.strftime("%H:%M:%S", time.localtime(recent['timestamp']))
-                log_entry = f"[{timestamp}] {msg}"
-                
-                # Add to log if this is a new entry (avoid duplicates)
-                if not self.action_log.toPlainText().endswith(log_entry):
-                    self.action_log.append(log_entry)
+            # Update market activity log with recent transactions from all teams
+            self.update_market_activity_log()
             
         except Exception as e:
-            logger.error(f"Error updating portfolio view: {e}")
-            self.action_log.append(f"Error updating portfolio: {str(e)}")
+            logger.error(f"Error updating team performance: {str(e)}")
+            self.market_log.append(f"Error updating performance data: {str(e)}")
+
+    def update_market_activity_log(self):
+        """Update the market activity log with recent transactions"""
+        try:
+            all_transactions = []
+            
+            # Collect recent transactions from all teams
+            for team_id in range(market_state.TEAM_COUNT):
+                try:
+                    portfolio = market_state.get_team_portfolio(team_id)
+                    if 'transactions' in portfolio and portfolio['transactions']:
+                        for tx in portfolio['transactions']:
+                            tx_copy = tx.copy()  # Create a copy to avoid modifying original
+                            tx_copy['team_id'] = team_id
+                            all_transactions.append(tx_copy)
+                except Exception as e:
+                    logger.error(f"Error getting transactions for team {team_id}: {str(e)}")
+            
+            # Sort by timestamp (most recent first)
+            all_transactions.sort(key=lambda x: x['timestamp'], reverse=True)
+            
+            # Take only the most recent 10 transactions
+            recent_transactions = all_transactions[:10]
+            
+            # Get current log content to avoid duplicates
+            current_log = self.market_log.toPlainText()
+            
+            # Add recent transactions to log
+            for tx in recent_transactions:
+                timestamp = time.strftime("%H:%M:%S", time.localtime(tx['timestamp']))
+                
+                # Format message based on transaction type
+                if tx['type'] == 'buy':
+                    msg = f"Team {tx['team_id']} bought {tx['quantity']} {tx['stock']} at ${tx['price']:.2f}"
+                elif tx['type'] == 'sell':
+                    msg = f"Team {tx['team_id']} sold {tx['quantity']} {tx['stock']} at ${tx['price']:.2f}"
+                else:
+                    msg = f"Team {tx['team_id']} {tx['type']} {tx['quantity']} {tx['stock']}"
+                
+                log_entry = f"[{timestamp}] {msg}"
+                
+                # Only add if not already in log
+                if log_entry not in current_log:
+                    self.market_log.append(log_entry)
+                    
+        except Exception as e:
+            logger.error(f"Error updating market activity log: {str(e)}"
+)

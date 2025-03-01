@@ -83,9 +83,6 @@ class MarketControlPanel(QWidget):
         self.setup_timer()
         # Initialize button states
         self.update_button_states(False)
-        
-        # Ensure stock selector has an initial selection if available
-        self.update_stock_list()
 
     def create_controls(self):
         """Create all control widgets as class members"""
@@ -279,22 +276,6 @@ class MarketControlPanel(QWidget):
             }}
         """)
 
-        # Add Transaction Log section
-        transaction_group = QGroupBox("Market Transactions")
-        transaction_group.setStyleSheet(GROUP_BOX_STYLE)
-        transaction_layout = QVBoxLayout()
-        
-        self.transaction_table = QTableWidget()
-        self.transaction_table.setColumnCount(6)
-        self.transaction_table.setHorizontalHeaderLabels(["Time", "Team", "Type", "Stock", "Quantity", "Price"])
-        self.transaction_table.setStyleSheet(TABLE_STYLE)
-        self.transaction_table.horizontalHeader().setStretchLastSection(True)
-        self.transaction_table.verticalHeader().setVisible(False)
-        
-        transaction_layout.addWidget(self.transaction_table)
-        transaction_group.setLayout(transaction_layout)
-        layout.addWidget(transaction_group)
-
         self.setLayout(layout)
         self.update_stock_list()
         self.update_session_status()
@@ -309,67 +290,17 @@ class MarketControlPanel(QWidget):
         self.status_timer.timeout.connect(self.update_session_status)
         self.status_timer.start(500)  # Update status more frequently
 
-        # Add transaction update timer
-        self.transaction_timer = QTimer()
-        self.transaction_timer.timeout.connect(self.update_transaction_log)
-        self.transaction_timer.start(2000)  # Update every 2 seconds
-
-    # Fix the update_stock_list method to handle empty market state and ensure selection
     def update_stock_list(self):
-        """Properly update stock selectors with available stocks"""
-        try:
-            # First ensure market is initialized
-            if not market_state.stock_prices:
-                self.log_text.append("Initializing market state...")
-                market_state.initialize_market()
-                
-            # Get current stock symbols from market_state
-            current_stocks = list(market_state.stock_prices.keys())
-            
-            if not current_stocks:
-                self.log_text.append("ERROR: No stocks available after initialization!")
-                return
-                
-            # Save the currently selected items if they exist
-            current_stock = self.stock_selector.currentText()
-            current_team_stock = self.team_order_stock_selector.currentText()
-            
-            # Block signals during update to prevent handlers from firing incorrectly
-            self.stock_selector.blockSignals(True)
-            self.team_order_stock_selector.blockSignals(True)
-            
-            # Clear and repopulate both selectors
-            self.stock_selector.clear()
-            self.team_order_stock_selector.clear()
-            
-            # Add stocks to both selectors
-            self.stock_selector.addItems(current_stocks)
-            self.team_order_stock_selector.addItems(current_stocks)
-            
-            # Always select first item by default, then try to restore previous selection
-            self.stock_selector.setCurrentIndex(0)
-            self.team_order_stock_selector.setCurrentIndex(0)
-            
-            # Try to restore previous selections if they existed
-            if current_stock:
-                index = self.stock_selector.findText(current_stock)
-                if index >= 0:
-                    self.stock_selector.setCurrentIndex(index)
-                    
-            if current_team_stock:
-                index = self.team_order_stock_selector.findText(current_team_stock)
-                if index >= 0:
-                    self.team_order_stock_selector.setCurrentIndex(index)
-            
-            # Re-enable signals
-            self.stock_selector.blockSignals(False)
-            self.team_order_stock_selector.blockSignals(False)
-            
-            # Log current selection for debugging
-            self.log_text.append(f"Stock list updated. Selected: {self.stock_selector.currentText()}")
-            
-        except Exception as e:
-            self.log_text.append(f"Error updating stock list: {str(e)}")
+        """Update all stock selectors"""
+        current_stocks = market_state.stock_prices.keys()
+        
+        # Update main stock selector
+        self.stock_selector.clear()
+        self.stock_selector.addItems(current_stocks)
+        
+        # Update team order stock selector
+        self.team_order_stock_selector.clear()
+        self.team_order_stock_selector.addItems(current_stocks)
 
     def update_price_display(self):
         prices = market_state.get_stock_prices()
@@ -384,39 +315,16 @@ class MarketControlPanel(QWidget):
         # Make sure the table updates visually
         self.price_table.viewport().update()
 
-    # Fix override price function to properly get selected stock
     def override_price(self):
-        """Handle price override with proper error checks and stock selection"""
         if not market_session.session_active:
             self.log_text.append("Cannot override price: No active session")
             return
-        
-        # Verify stock selector has items
-        if self.stock_selector.count() == 0:
-            self.log_text.append("Stock selector is empty - refreshing selector")
-            self.update_stock_list()
-            if self.stock_selector.count() == 0:
-                self.log_text.append("ERROR: Failed to populate stock list!")
-                return
-        
-        # Get selected stock, force selection if needed
+            
         stock = self.stock_selector.currentText()
-        if not stock:
-            # Force a selection if none exists
-            if self.stock_selector.count() > 0:
-                self.stock_selector.setCurrentIndex(0)
-                stock = self.stock_selector.currentText()
-                self.log_text.append(f"Auto-selected stock: {stock}")
-            else:
-                self.log_text.append("Error: No stock available to select")
-                return
-        
-        # Continue with price override
         new_price = self.price_spinner.value()
-        self.log_text.append(f"Attempting price override for stock: {stock} to ${new_price:.2f}")
         
-        # Use the admin override function
-        if market_state.admin_override_price(stock, new_price):
+        # Update the market state with validation
+        if market_state.update_stock_price(stock, new_price):
             log_entry = f"Manual override: {stock} price set to ${new_price:.2f}"
             self.log_text.append(log_entry)
             # Force immediate update of price display
@@ -424,13 +332,9 @@ class MarketControlPanel(QWidget):
         else:
             self.log_text.append(f"Failed to override price for {stock}")
 
-    # Ensure selectors are properly initialized when the market session starts
     def start_session(self):
-        """Start the market session and initialize stock selectors"""
         if market_session.start_session():
             self.log_text.append("New trading session started")
-            # Make sure we refresh stock list after session starts
-            self.update_stock_list()
             self.update_button_states(True)
             self.update_session_status()
         else:
@@ -485,92 +389,67 @@ class MarketControlPanel(QWidget):
         self.place_order_btn.setEnabled(is_session_active and not is_paused)
         self.apply_change_btn.setEnabled(is_session_active and not is_paused)
 
-    # Fix place team order function to properly get selected stock
     def place_team_order(self):
-        """Admin-placed order for teams with proper stock selection"""
+        """Enhanced team order placement with separate stock selector"""
         if not market_session.session_active:
             self.log_text.append("Cannot place order: No active session")
             return
-        
-        # Verify stock selector has items
-        if self.team_order_stock_selector.count() == 0:
-            self.log_text.append("Team order stock selector is empty - refreshing selectors")
-            self.update_stock_list()
-            if self.team_order_stock_selector.count() == 0:
-                self.log_text.append("ERROR: Failed to populate stock list!")
-                return
-        
-        # Get team selection
+            
         team_id = int(self.team_selector.currentText().split()[-1])
-        
-        # Get selected stock, force selection if needed
-        stock = self.team_order_stock_selector.currentText()
-        if not stock:
-            # Force a selection if none exists
-            if self.team_order_stock_selector.count() > 0:
-                self.team_order_stock_selector.setCurrentIndex(0)
-                stock = self.team_order_stock_selector.currentText()
-                self.log_text.append(f"Auto-selected stock: {stock}")
-            else:
-                self.log_text.append("Error: No stock available to select")
-                return
-        
-        # Continue with order placement
+        stock = self.team_order_stock_selector.currentText()  # Use separate selector
         quantity = self.quantity_spinner.value()
         order_type = self.order_type.currentText()
         
-        # Rest of the function remains the same
         # Validate quantity
         if quantity <= 0:
             self.log_text.append("Error: Quantity must be positive")
             return
+            
+        # Validate against available quantity for buys
+        if order_type == "buy" and quantity > market_state.available_quantities.get(stock, 0):
+            self.log_text.append(f"Error: Insufficient {stock} available in market")
+            return
         
-        # Check for available quantity only for buys
-        if order_type.lower() == "buy":
-            available = market_state.available_quantities.get(stock, 0)
-            if quantity > available:
-                self.log_text.append(f"Error: Only {available} shares of {stock} available")
-                return
+        order = {
+            'stock': stock,
+            'quantity': quantity,
+            'type': order_type,
+            'timestamp': time.time()
+        }
+        
+        # Get current price for logging
+        current_price = market_state.stock_prices.get(stock, 0)
+        estimated_value = current_price * quantity
         
         # Log attempt
-        current_price = market_state.stock_prices.get(stock, 0)
-        order_value = current_price * quantity
-        self.log_text.append(f"Attempting {order_type} order: {quantity} {stock} at ${current_price:.2f}")
+        self.log_text.append(f"Attempting {order_type} order: {quantity} {stock} at ~${current_price:.2f} (Est. ${estimated_value:.2f})")
         
-        # Debug information
-        self.log_text.append(f"DEBUG - Selected stock: '{stock}', Team: {team_id}, Type: {order_type}")
+        success = market_state.process_market_order(team_id, order)
         
-        # Use admin_place_order function for direct order placement
-        if market_state.admin_place_order(team_id, stock, quantity, order_type):
-            self.log_text.append(f"Order executed: Team {team_id}, {order_type} {quantity} {stock}")
-            
+        if success:
+            self.log_text.append(f"Order executed for Team {team_id}")
             # Show updated portfolio value
             portfolio = market_state.get_team_portfolio(team_id)
             self.log_text.append(f"Team {team_id} new portfolio value: ${portfolio['total_value']:,.2f}")
-            
-            # Reset quantity spinner
+            # Reset quantity spinner after successful order
             self.quantity_spinner.setValue(100)
-            
-            # Update display
-            self.update_price_display()
         else:
-            self.log_text.append(f"Order failed: Team {team_id}, {order_type} {quantity} {stock}")
+            self.log_text.append(f"Order failed for Team {team_id}")
 
-    # Fix price change function to properly get selected stock
     def apply_price_change(self):
-        """Apply percentage price change with proper stock selection"""
+        """Apply percentage price change to selected stock with improved validation"""
         if not market_session.session_active:
             self.log_text.append("Cannot manipulate price: No active session")
             return
-        
-        # Ensure a stock is selected    
+            
         stock = self.stock_selector.currentText()
-        if not stock:
-            self.log_text.append("Error: No stock selected")
+        percent_change = self.price_change_spinner.value() / 100.0
+        
+        # Add validation for maximum single change
+        if abs(percent_change) > 0.20:  # 20% maximum change
+            self.log_text.append("Warning: Maximum allowed change is ±20%")
             return
             
-        percent_change = self.price_change_spinner.value() / 100.0  # Convert to decimal
-        
         current_price = market_state.stock_prices.get(stock, 0)
         new_price = current_price * (1 + percent_change)
         
@@ -579,74 +458,11 @@ class MarketControlPanel(QWidget):
             self.log_text.append("Error: Price cannot go below $0.01")
             return
         
-        # Debug information
-        self.log_text.append(f"DEBUG - Changing price for: '{stock}' by {percent_change*100:+.2f}%")
-        
-        # Use the price manipulation function with percentage flag
-        if market_state.update_stock_price(stock, percent_change, is_percent_change=True):
-            log_entry = f"Price change: {stock} adjusted by {percent_change*100:+.2f}% to ${new_price:.2f}"
+        if market_state.update_stock_price(stock, new_price):
+            log_entry = f"Price manipulation: {stock} changed by {percent_change*100:+.2f}% from ${current_price:.2f} to ${new_price:.2f}"
             self.log_text.append(log_entry)
-            
-            # Reset spinner and update display
-            self.price_change_spinner.setValue(0.0)
             self.update_price_display()
+            # Reset spinner to 0 after successful change
+            self.price_change_spinner.setValue(0.0)
         else:
-            self.log_text.append(f"Failed to change price for {stock}")
-
-    # Add a method to update transaction log
-    def update_transaction_log(self):
-        """Update transaction log with recent transactions from all teams"""
-        try:
-            all_transactions = []
-            
-            # Collect transactions from all teams
-            for team_id in range(market_state.TEAM_COUNT):
-                portfolio = market_state.get_team_portfolio(team_id)
-                if 'transactions' in portfolio:
-                    for tx in portfolio['transactions']:
-                        tx['team_id'] = team_id  # Add team ID to transaction data
-                        all_transactions.append(tx)
-            
-            # Sort by timestamp (most recent first)
-            all_transactions.sort(key=lambda x: x['timestamp'], reverse=True)
-            
-            # Limit to last 20 transactions
-            recent_transactions = all_transactions[:20]
-            
-            # Update table
-            self.transaction_table.setRowCount(len(recent_transactions))
-            
-            for row, tx in enumerate(recent_transactions):
-                # Format timestamp
-                time_item = QTableWidgetItem(time.strftime("%H:%M:%S", time.localtime(tx['timestamp'])))
-                
-                # Team ID
-                team_item = QTableWidgetItem(f"Team {tx['team_id']}")
-                
-                # Type with color
-                type_text = tx['type'].upper()
-                type_item = QTableWidgetItem(type_text)
-                if type_text == "BUY":
-                    type_item.setForeground(QBrush(QColor("#4BB543")))
-                elif type_text == "SELL":
-                    type_item.setForeground(QBrush(QColor("#FF3333")))
-                
-                # Stock symbol
-                stock_item = QTableWidgetItem(tx['stock'])
-                
-                # Quantity
-                quantity_item = QTableWidgetItem(f"{tx['quantity']:,}")
-                
-                # Price
-                price_item = QTableWidgetItem(f"${tx['price']:,.2f}")
-                
-                # Add items to table
-                self.transaction_table.setItem(row, 0, time_item)
-                self.transaction_table.setItem(row, 1, team_item)
-                self.transaction_table.setItem(row, 2, type_item)
-                self.transaction_table.setItem(row, 3, stock_item)
-                self.transaction_table.setItem(row, 4, quantity_item)
-                self.transaction_table.setItem(row, 5, price_item)
-            
-        except Exception as e:
-            self.log_text.append(f"Error updating transaction log: {str(e)}")
+            self.log_text.append(f"Failed to manipulate price for {stock}")

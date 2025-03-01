@@ -1,20 +1,30 @@
 from PyQt5.QtGui import QColor
 
-# Professional trading platform color scheme
+# Update COLORS dictionary with complete color set
 COLORS = {
-    'background': '#1C1C28',  # Dark theme background
-    'card_background': '#282834',  # Slightly lighter for cards
-    'text': '#E8E8E8',  # Bright text
-    'text_secondary': '#A0A0A8',  # Muted text
-    'accent': '#2962FF',  # Vibrant blue
-    'accent_hover': '#2979FF',  # Lighter blue for hover
-    'positive': '#00C853',  # Bright green
-    'negative': '#FF3D00',  # Bright red
-    'neutral': '#FFB300',  # Warning/neutral amber
-    'chart_grid': '#32323E',  # Subtle grid lines
-    'border': '#3E3E4A',  # Refined borders
-    'hover': '#303042',  # Hover state
-    'active': '#2962FF20',  # Active state with transparency
+    'background': '#1E1E2E',      # Dark background
+    'card': '#262837',            # Slightly lighter for cards
+    'primary': '#2D5AF7',         # Bright blue for primary actions
+    'primary_light': '#3D66F5',   # Lighter primary
+    'primary_dark': '#1D4AE7',    # Darker primary
+    'accent': '#00A3FF',          # Vibrant blue for accents
+    'accent_hover': '#0091FF',    # Hover state for accent
+    'text': '#FFFFFF',            # Pure white for main text
+    'text_secondary': '#94A3B8',  # Soft gray for secondary text
+    'text_light': '#CBD5E1',      # Light gray text
+    'border': '#363853',          # Subtle borders
+    'success': '#10B981',         # Green for positive actions
+    'error': '#EF4444',           # Red for negative actions
+    'warning': '#F59E0B',         # Amber for warnings
+    'hover': '#2F3349',           # Hover state color
+    'disabled': '#64748B',        # Disabled state
+    'white': '#FFFFFF',           # Pure white
+    'positive': '#10B981',        # For positive changes (same as success)
+    'negative': '#EF4444',        # For negative changes (same as error)
+    'neutral': '#94A3B8',         # For neutral states
+    'chart_grid': '#363853',      # For chart grid lines
+    'active': '#2D5AF720',        # Semi-transparent primary for active states
+    'card_background': '#262837'  # Same as card for consistency
 }
 
 # Fix the animation style by using double braces to escape them
@@ -252,5 +262,109 @@ QComboBox::down-arrow {{
     border-right: 5px solid transparent;
     border-top: 5px solid {COLORS['text']};
     margin-right: 8px;
+}}
+"""
+
+# Add APP_STYLE definition
+APP_STYLE = f"""
+QMainWindow, QDialog {{
+    background-color: {COLORS['background']};
+    color: {COLORS['text']};
+    font-family: 'Segoe UI', Arial, sans-serif;
+}}
+
+QWidget {{
+    font-size: 12px;
+}}
+
+QLabel {{
+    color: {COLORS['text']};
+}}
+
+QGroupBox {{
+    font-weight: bold;
+    border: 1px solid {COLORS['border']};
+    border-radius: 6px;
+    margin-top: 12px;
+    padding: 10px;
+}}
+
+QPushButton {{
+    background-color: {COLORS['primary']};
+    color: {COLORS['white']};
+    border: none;
+    border-radius: 4px;
+    padding: 8px 16px;
+    font-weight: bold;
+}}
+
+QPushButton:hover {{
+    background-color: {COLORS['primary_light']};
+}}
+
+QPushButton:pressed {{
+    background-color: {COLORS['primary_dark']};
+}}
+
+QPushButton:disabled {{
+    background-color: {COLORS['disabled']};
+    color: {COLORS['text_light']};
+}}
+
+QLineEdit, QTextEdit, QSpinBox, QDoubleSpinBox {{
+    background-color: {COLORS['white']};
+    color: {COLORS['text']};
+    border: 1px solid {COLORS['border']};
+    border-radius: 4px;
+    padding: 6px;
+}}
+
+QComboBox {{
+    background-color: {COLORS['white']};
+    color: {COLORS['text']};
+    border: 1px solid {COLORS['border']};
+    border-radius: 4px;
+    padding: 6px;
+}}
+
+QStatusBar {{
+    background-color: {COLORS['primary']};
+    color: {COLORS['white']};
+}}
+
+QTabWidget::pane {{
+    border: 1px solid {COLORS['border']};
+    border-radius: 4px;
+}}
+
+QTabBar::tab {{
+    background-color: {COLORS['background']};
+    color: {COLORS['text']};
+    padding: 8px 16px;
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+}}
+
+QTabBar::tab:selected {{
+    background-color: {COLORS['primary']};
+    color: {COLORS['white']};
+}}
+
+QScrollBar:vertical {{
+    border: none;
+    background-color: {COLORS['background']};
+    width: 12px;
+    margin: 0;
+}}
+
+QScrollBar::handle:vertical {{
+    background-color: {COLORS['border']};
+    border-radius: 6px;
+    min-height: 20px;
+}}
+
+QScrollBar::add-line:vertical,
+QScrollBar::sub-line:vertical {{
+    height: 0px;
 }}
 """
