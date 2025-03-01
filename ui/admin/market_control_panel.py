@@ -2,6 +2,7 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGroupBox,
                             QPushButton, QLabel, QComboBox, QDoubleSpinBox,
                             QTextEdit, QTableWidget, QTableWidgetItem, QSpinBox)
 from PyQt5.QtCore import QTimer
+from PyQt5.QtGui import QColor  # Add this import
 from simulation import market_state
 from simulation.market_simulation import market_session
 import time
@@ -103,9 +104,11 @@ class MarketControlPanel(QWidget):
         self.log_text = QTextEdit()
 
         # Configure controls
-        self.price_spinner.setRange(0.01, 10000.00)
+        self.price_spinner.setRange(0.01, 100000.00)  # Increased range
         self.price_spinner.setDecimals(2)
-        self.price_spinner.setValue(100.00)
+        self.price_spinner.setSingleStep(0.10)  # More precise control
+        self.price_spinner.setPrefix("$")
+        self.price_spinner.setKeyboardTracking(False)  # Only update on enter/finish editing
         self.log_text.setReadOnly(True)
 
         # Connect signals
@@ -115,9 +118,12 @@ class MarketControlPanel(QWidget):
         self.resume_btn.clicked.connect(self.resume_session)
         self.override_btn.clicked.connect(self.override_price)  # Connect override button
 
+        # Add signal connection for stock selection
+        self.stock_selector.currentIndexChanged.connect(self.update_price_spinner_range)
+
         # Add trade order controls with separate stock selector
         self.team_selector = QComboBox()
-        self.team_selector.addItems([f"Team {i}" for i in range(market_state.TEAM_COUNT)])
+        self.team_selector.addItems([f"Team {i+1}" for i in range(market_state.TEAM_COUNT)])
         
         self.order_type = QComboBox()
         self.order_type.addItems(["buy", "sell"])
@@ -303,29 +309,91 @@ class MarketControlPanel(QWidget):
         self.team_order_stock_selector.addItems(current_stocks)
 
     def update_price_display(self):
-        prices = market_state.get_stock_prices()
-        quantities = market_state.available_quantities
+        """Enhanced price display with more stock information"""
+        self.price_table.setColumnCount(5)  # Increased columns
+        self.price_table.setHorizontalHeaderLabels([
+            "Symbol (Name)", "Sector", "Price", "Change %", "Available"
+        ])
         
-        self.price_table.setRowCount(len(prices))
-        for row, (stock, price) in enumerate(prices.items()):
-            self.price_table.setItem(row, 0, QTableWidgetItem(stock))
-            self.price_table.setItem(row, 1, QTableWidgetItem(f"${price:.2f}"))
-            self.price_table.setItem(row, 2, QTableWidgetItem(str(quantities.get(stock, 0))))
+        stocks = market_state.stock_prices.keys()
+        self.price_table.setRowCount(len(stocks))
         
-        # Make sure the table updates visually
+        for row, symbol in enumerate(stocks):
+            info = market_state.get_stock_info(symbol)
+            if info:
+                # Symbol and name
+                self.price_table.setItem(row, 0, 
+                    QTableWidgetItem(f"{symbol} ({info['name']})"))
+                
+                # Sector
+                self.price_table.setItem(row, 1,
+                    QTableWidgetItem(info['sector']))
+                
+                # Price
+                self.price_table.setItem(row, 2,
+                    QTableWidgetItem(f"${info['current_price']:.2f}"))
+                
+                # Change %
+                change_item = QTableWidgetItem(f"{info['change']:+.2f}%")
+                change_item.setForeground(
+                    QColor('green') if info['change'] >= 0 else QColor('red'))
+                self.price_table.setItem(row, 3, change_item)
+                
+                # Available quantity
+                self.price_table.setItem(row, 4,
+                    QTableWidgetItem(f"{info['available']:,}"))
+        
+        self.price_table.resizeColumnsToContents()
         self.price_table.viewport().update()
 
+    def update_price_spinner_range(self):
+        """Update price spinner range based on selected stock"""
+        stock = self.stock_selector.currentText()
+        if stock in market_state.stock_prices:
+            current_price = market_state.stock_prices[stock]
+            # Set range to 50% below and 200% above current price
+            min_price = max(0.01, current_price * 0.5)
+            max_price = current_price * 3.0
+            self.price_spinner.setRange(min_price, max_price)
+            self.price_spinner.setValue(current_price)
+
     def override_price(self):
+        """Enhanced manual price override with validation and feedback"""
         if not market_session.session_active:
             self.log_text.append("Cannot override price: No active session")
             return
             
         stock = self.stock_selector.currentText()
+        if not stock:
+            self.log_text.append("Error: No stock selected")
+            return
+            
         new_price = self.price_spinner.value()
+        current_price = market_state.stock_prices.get(stock, 0)
+        
+        # Calculate percentage change
+        percent_change = ((new_price - current_price) / current_price) * 100
+        
+        # Validate price change
+        if abs(percent_change) > 50:  # Limit to 50% change
+            self.log_text.append(f"Warning: Price change of {percent_change:.1f}% exceeds 50% limit")
+            return
+        
+        # Confirm large changes
+        if abs(percent_change) > 20:
+            msg = (f"Warning: Large price change of {percent_change:.1f}%\n"
+                  f"Current: ${current_price:.2f} → New: ${new_price:.2f}\n"
+                  f"Do you want to proceed?")
+            from PyQt5.QtWidgets import QMessageBox
+            reply = QMessageBox.question(self, 'Confirm Price Override', msg,
+                                       QMessageBox.Yes | QMessageBox.No)
+            if reply == QMessageBox.No:
+                return
         
         # Update the market state with validation
-        if market_state.update_stock_price(stock, new_price):
-            log_entry = f"Manual override: {stock} price set to ${new_price:.2f}"
+        if market_state.manual_override_price(stock, new_price):
+            log_entry = (f"Manual override: {stock} price changed from "
+                        f"${current_price:.2f} to ${new_price:.2f} ({percent_change:+.2f}%)")
             self.log_text.append(log_entry)
             # Force immediate update of price display
             self.update_price_display()
@@ -409,12 +477,12 @@ class MarketControlPanel(QWidget):
         self.apply_change_btn.setEnabled(is_session_active and not is_paused)
 
     def place_team_order(self):
-        """Enhanced team order placement with separate stock selector"""
+        """Enhanced team order placement with adjusted team ID calculation"""
         if not market_session.session_active:
             self.log_text.append("Cannot place order: No active session")
             return
             
-        team_id = int(self.team_selector.currentText().split()[-1])
+        team_id = int(self.team_selector.currentText().split()[-1]) - 1  # Subtract 1 to convert to 0-based index
         stock = self.team_order_stock_selector.currentText()  # Use separate selector
         quantity = self.quantity_spinner.value()
         order_type = self.order_type.currentText()

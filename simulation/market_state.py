@@ -13,8 +13,54 @@ last_prices = {}
 trading_volume = {}
 price_history = {}
 
+# Add stock details dictionary
+STOCK_DETAILS = {
+    'NOVA': {
+        'name': 'TechNova Innovations',
+        'sector': 'Technology',
+        'price': 100,
+        'quantity': 1000,
+        'description': 'Founded by visionary engineers, TechNova Innovations is at the forefront of digital transformation. Known for breakthrough software and hardware solutions.'
+    },
+    'GREEN': {
+        'name': 'GreenFusion Energy',
+        'sector': 'Renewable Energy',
+        'price': 80,
+        'quantity': 1500,
+        'description': 'GreenFusion Energy harnesses the power of nature to deliver sustainable, cutting-edge energy solutions. Pioneering solar and wind technologies.'
+    },
+    'FIN': {
+        'name': 'FinTrust Capital',
+        'sector': 'Finance',
+        'price': 120,
+        'quantity': 800,
+        'description': 'With decades of expertise, FinTrust Capital is celebrated for its robust financial services and innovative solutions.'
+    },
+    'MED': {
+        'name': 'MediCore Health',
+        'sector': 'Healthcare',
+        'price': 90,
+        'quantity': 1000,
+        'description': 'Combining advanced medical research with a patient-first approach, MediCore Health is revolutionizing healthcare.'
+    },
+    'CSMR': {
+        'name': 'ConsumerX Global',
+        'sector': 'Consumer Goods',
+        'price': 110,
+        'quantity': 900,
+        'description': 'ConsumerX Global leads with a dynamic range of smart, innovative products designed for modern lifestyles.'
+    },
+    'IND': {
+        'name': 'IndustriMax Holdings',
+        'sector': 'Industrial',
+        'price': 70,
+        'quantity': 2000,
+        'description': 'IndustriMax Holdings powers the modern economy with high-performance machinery and infrastructure solutions.'
+    }
+}
+
 def initialize_market():
-    """Set up initial market data."""
+    """Set up initial market data with enhanced stock information."""
     global stock_prices, available_quantities, trading_volume, last_prices, team_portfolios, price_history
     
     # Clear any existing data
@@ -25,20 +71,15 @@ def initialize_market():
     team_portfolios.clear()
     price_history.clear()
     
-    # Initialize example stocks with their initial data
-    initial_stocks = {
-        'TECH': {'price': 100, 'quantity': 1000},
-        'BANK': {'price': 50, 'quantity': 2000},
-        'AUTO': {'price': 75, 'quantity': 1500},
-    }
-    
-    for symbol, data in initial_stocks.items():
+    # Initialize stocks from STOCK_DETAILS
+    for symbol, data in STOCK_DETAILS.items():
         stock_prices[symbol] = data['price']
         available_quantities[symbol] = data['quantity']
         last_prices[symbol] = data['price']
         trading_volume[symbol] = 0
+        price_history[symbol] = []
     
-    # Initialize team portfolios with starting budget
+    # Initialize team portfolios
     for i in range(TEAM_COUNT):
         team_portfolios[i] = {
             'cash': STARTING_BUDGET,
@@ -48,10 +89,23 @@ def initialize_market():
             'total_value': STARTING_BUDGET
         }
     
-    price_history = {stock: [] for stock in stock_prices.keys()}
-    
-    logger.info(f"Market initialized with {len(initial_stocks)} stocks and {TEAM_COUNT} teams")
-    logger.info(f"Each team starting with ${STARTING_BUDGET:,.2f}")
+    logger.info(f"Market initialized with {len(STOCK_DETAILS)} stocks")
+    for symbol, data in STOCK_DETAILS.items():
+        logger.info(f"{symbol} ({data['name']}) - ${data['price']} x {data['quantity']} shares")
+
+def get_stock_info(symbol):
+    """Get detailed information about a stock"""
+    if symbol in STOCK_DETAILS:
+        info = STOCK_DETAILS[symbol].copy()
+        info.update({
+            'current_price': stock_prices[symbol],
+            'available': available_quantities[symbol],
+            'volume': trading_volume.get(symbol, 0),
+            'change': ((stock_prices[symbol] - last_prices[symbol]) / last_prices[symbol] * 100)
+            if symbol in last_prices else 0
+        })
+        return info
+    return None
 
 def get_stock_prices():
     """Return current stock price data."""
@@ -492,3 +546,62 @@ def get_session_summary(team_id):
         'cash': portfolio['cash'],
         'holdings': portfolio['holdings'],
     }
+
+def manual_override_price(stock, new_price):
+    """Enhanced manual price override with safety checks and logging"""
+    try:
+        # Input validation
+        if not stock or stock not in stock_prices:
+            logger.error(f"Invalid stock symbol: {stock}")
+            return False
+            
+        if new_price <= 0:
+            logger.error(f"Invalid price value: {new_price}")
+            return False
+        
+        current_price = stock_prices[stock]
+        percent_change = ((new_price - current_price) / current_price) * 100
+        
+        # Additional validations
+        if new_price < 0.01:
+            logger.error("Price cannot be less than $0.01")
+            return False
+            
+        if abs(percent_change) > 50:
+            logger.error(f"Price change of {percent_change:.1f}% exceeds 50% limit")
+            return False
+        
+        # Store the last price before updating
+        last_prices[stock] = current_price
+        
+        # Update the price
+        stock_prices[stock] = new_price
+        
+        # Log the change with additional details
+        info = STOCK_DETAILS[stock]
+        logger.info(f"Manual price override: {stock} ({info['name']}) "
+                   f"changed by {percent_change:+.2f}% "
+                   f"from ${current_price:.2f} to ${new_price:.2f}")
+        
+        # Update price history
+        if stock not in price_history:
+            price_history[stock] = []
+        price_history[stock].append({
+            'timestamp': time.time(),
+            'price': new_price,
+            'type': 'manual_override',
+            'previous_price': current_price
+        })
+        
+        # Trim history if needed
+        if len(price_history[stock]) > 100:
+            price_history[stock] = price_history[stock][-100:]
+        
+        # Save market state
+        save_market_state()
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"Price override failed: {str(e)}")
+        return False

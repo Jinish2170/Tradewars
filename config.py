@@ -1,7 +1,7 @@
 # Configuration Module (config.py)
 
 # Team count
-TEAM_COUNT = 5
+TEAM_COUNT = 11  # Changed from 5 to 11
 
 # Starting budget
 STARTING_BUDGET = 100000
