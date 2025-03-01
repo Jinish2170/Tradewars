@@ -389,30 +389,16 @@ class ParticipantView(QWidget):
         team_performance_tab = QWidget()
         team_layout = QVBoxLayout(team_performance_tab)
         team_layout.setContentsMargins(15, 15, 15, 15)
-        team_layout.setSpacing(15)
+        team_layout.setSpacing(8)  # Reduced spacing between elements
         
-        # Market summary cards
-        summary_layout = QHBoxLayout()
-        summary_layout.setSpacing(12)
-        
-        # Create market statistics cards instead of portfolio cards
-        self.best_team_card = SummaryCard("Best Team", "Team 0", THEME['accent'])
-        self.avg_value_card = SummaryCard("Average Value", "$100,000", THEME['text'])
-        self.market_activity_card = SummaryCard("Market Activity", "Low", THEME['neutral'])
-        
-        summary_layout.addWidget(self.best_team_card)
-        summary_layout.addWidget(self.avg_value_card)
-        summary_layout.addWidget(self.market_activity_card)
-        
-        team_layout.addLayout(summary_layout)
-        
-        # Team performance table
+        # Team performance table directly at the top
         teams_frame = QFrame()
         teams_frame.setObjectName("Card")
         teams_frame.setStyleSheet(CARD_STYLE)
         
         teams_layout = QVBoxLayout(teams_frame)
         teams_layout.setContentsMargins(15, 12, 15, 12)
+        teams_layout.setSpacing(8)  # Reduced spacing inside frame
         
         # Teams header
         teams_header = QHBoxLayout()
@@ -421,7 +407,7 @@ class ParticipantView(QWidget):
         teams_header.addWidget(teams_title)
         teams_layout.addLayout(teams_header)
         
-        # Team rankings table
+        # Team rankings table with more vertical space
         self.teams_table = QTableWidget()
         self.teams_table.setColumnCount(5)
         self.teams_table.setHorizontalHeaderLabels(["Team", "Cash", "Holdings Value", "Total Value", "% Change"])
@@ -429,18 +415,21 @@ class ParticipantView(QWidget):
         self.teams_table.setAlternatingRowColors(True)
         self.teams_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.teams_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.teams_table.verticalHeader().setDefaultSectionSize(30)  # Optimize row height
+        self.teams_table.setMinimumHeight(400)  # Give enough space for all teams
         
         teams_layout.addWidget(self.teams_table)
         
-        # Market transactions log
+        # Market transactions log with reduced height
         log_layout = QVBoxLayout()
+        log_layout.setSpacing(4)  # Reduced spacing
         log_title = QLabel("Recent Market Activity")
         log_title.setStyleSheet(f"color: {THEME['text']}; font-size: 16px; font-weight: bold;")
         log_layout.addWidget(log_title)
         
         self.market_log = QTextEdit()
         self.market_log.setReadOnly(True)
-        self.market_log.setFixedHeight(120)
+        self.market_log.setFixedHeight(100)  # Reduced height
         self.market_log.setStyleSheet(f"""
             QTextEdit {{
                 background-color: {THEME['header']};
@@ -454,7 +443,6 @@ class ParticipantView(QWidget):
         log_layout.addWidget(self.market_log)
         
         teams_layout.addLayout(log_layout)
-        
         team_layout.addWidget(teams_frame)
         
         # Add tabs to tab widget
@@ -579,9 +567,6 @@ class ParticipantView(QWidget):
         """Update team performance data"""
         try:
             all_teams_data = []
-            best_team = 0
-            best_performance = 0
-            total_value = 0
             total_transactions = 0
             
             # Get data for all teams
@@ -594,13 +579,7 @@ class ParticipantView(QWidget):
                     profit_loss = portfolio['total_value'] - initial_value
                     profit_percent = (profit_loss / initial_value) * 100 if initial_value > 0 else 0
                     
-                    # Track best performing team
-                    if profit_percent > best_performance:
-                        best_performance = profit_percent
-                        best_team = team_id
-                    
-                    # Add to totals for averages
-                    total_value += portfolio['total_value']
+                    # Add to totals for transactions count
                     if 'transactions' in portfolio:
                         total_transactions += len(portfolio['transactions'])
                     
@@ -614,26 +593,6 @@ class ParticipantView(QWidget):
                     })
                 except Exception as e:
                     logger.error(f"Error getting portfolio for team {team_id}: {str(e)}")
-            
-            # Calculate averages
-            avg_value = total_value / market_state.TEAM_COUNT if market_state.TEAM_COUNT > 0 else 0
-            
-            # Determine market activity level
-            if total_transactions > 50:
-                activity = "High"
-                activity_color = THEME['positive']
-            elif total_transactions > 20:
-                activity = "Medium"
-                activity_color = THEME['accent']
-            else:
-                activity = "Low"
-                activity_color = THEME['neutral']
-            
-            # Update summary cards
-            best_team_text = f"Team {best_team} (+{best_performance:.1f}%)"
-            self.best_team_card.update_value(best_team_text, THEME['positive'] if best_performance > 0 else THEME['negative'])
-            self.avg_value_card.update_value(f"${avg_value:,.2f}")
-            self.market_activity_card.update_value(activity, activity_color)
             
             # Sort teams by total value (descending)
             all_teams_data.sort(key=lambda x: x['total_value'], reverse=True)
@@ -678,7 +637,7 @@ class ParticipantView(QWidget):
                 self.teams_table.setItem(row, 3, total_item)
                 self.teams_table.setItem(row, 4, percent_item)
             
-            # Update market activity log with recent transactions from all teams
+            # Update market activity log with recent transactions
             self.update_market_activity_log()
             
         except Exception as e:
