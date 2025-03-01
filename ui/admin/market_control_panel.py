@@ -383,19 +383,20 @@ class MarketControlPanel(QWidget):
             self.log_text.append("Failed to resume session")
 
     def update_session_status(self):
+        """Update session status with time remaining"""
         status = market_session.get_session_status()
         status_text = f"Session: {status['current_session']}/{status['max_sessions']}"
         
         if status['is_active']:
-            if market_session.pause_lock:
-                status_text += " (Paused)"
+            if status['is_paused']:
+                status_text += f" (Paused - {status['time_remaining']} remaining)"
             else:
-                status_text += " (Active)"
+                status_text += f" (Active - {status['time_remaining']} remaining)"
         else:
             status_text += " (Inactive)"
             
         self.session_status_label.setText(status_text)
-        self.update_button_states(status['is_active'], market_session.pause_lock)
+        self.update_button_states(status['is_active'], status['is_paused'])
 
     def update_button_states(self, is_session_active, is_paused=False):
         """Update button states based on session status"""

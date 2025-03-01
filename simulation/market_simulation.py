@@ -8,6 +8,7 @@ import math
 import time
 import threading
 import logging
+from PyQt5.QtCore import QTimer
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -302,6 +303,11 @@ class MarketSession:
         self.price_update_interval = 1.0
         self.initial_prices = {}
         self.initialized = False  # Add flag to track if market is initialized
+        self.session_duration = 600  # 10 minutes in seconds
+        self.time_remaining = self.session_duration
+        self.timer = QTimer()
+        self.timer.timeout.connect(self.update_session_time)
+        self.timer.setInterval(1000)  # Update every second
 
     def initialize_session(self):
         """Always initialize market state properly"""
@@ -320,7 +326,7 @@ class MarketSession:
         logger.info("Market initialized - ready for session start")
 
     def start_session(self):
-        """Enhanced session start with proper initialization"""
+        """Enhanced session start with timer"""
         if self.session_active:
             logger.warning("A session is already active")
             return False
@@ -334,6 +340,10 @@ class MarketSession:
             self.tick_count = 0
             self.pause_lock = False
             
+            # Reset and start timer
+            self.time_remaining = self.session_duration
+            self.timer.start()
+            
             # Initialize price manager if needed
             if not self.price_manager:
                 self.price_manager = PriceFluctuationManager()
@@ -342,7 +352,7 @@ class MarketSession:
             self.session_active = True
             self.is_active = True
             
-            logger.info(f"Trading Session {self.current_session} started")
+            logger.info(f"Trading Session {self.current_session} started - Duration: 10 minutes")
             return True
             
         except Exception as e:
@@ -351,15 +361,38 @@ class MarketSession:
             self.is_active = False
             return False
 
+    def update_session_time(self):
+        """Update session countdown timer"""
+        if not self.session_active or self.pause_lock:
+            return
+
+        self.time_remaining -= 1
+        
+        # Log time remaining at certain intervals
+        if self.time_remaining in [300, 180, 60, 30, 10]:  # 5min, 3min, 1min, 30s, 10s
+            mins = self.time_remaining // 60
+            secs = self.time_remaining % 60
+            logger.info(f"Session time remaining: {mins}:{secs:02d}")
+            
+        # End session when time runs out
+        if self.time_remaining <= 0:
+            logger.info("Session time expired")
+            self.end_session()
+
     def end_session(self):
-        """End current trading session"""
+        """Enhanced session end with timer cleanup"""
         if not self.session_active:
             logger.warning("No active session to end")
             return False
             
         try:
+            # Stop the timer
+            self.timer.stop()
+            self.time_remaining = self.session_duration
+            
+            # End session
             self.session_active = False
-            self.is_active = False  # Set main active flag
+            self.is_active = False
             self.pause_lock = True
             
             # Save final state of current session
@@ -384,11 +417,16 @@ class MarketSession:
             return False
 
     def get_session_status(self):
-        """Get current session information"""
+        """Enhanced status with time remaining"""
+        mins = self.time_remaining // 60
+        secs = self.time_remaining % 60
+        
         return {
             'current_session': self.current_session,
             'max_sessions': self.max_sessions,
-            'is_active': self.session_active
+            'is_active': self.session_active,
+            'time_remaining': f"{mins}:{secs:02d}",
+            'is_paused': self.pause_lock
         }
 
     @safe_operation
@@ -415,32 +453,23 @@ class MarketSession:
                     self.log_market_status()
     
     def pause(self):
-        """Pause market updates"""
-        if not self.session_active:
-            logger.warning("No active session to pause")
-            return False
-            
-        if self.pause_lock:
-            logger.warning("Session is already paused")
+        """Enhanced pause with timer pause"""
+        if not self.session_active or self.pause_lock:
             return False
             
         self.pause_lock = True
-        logger.info("Market updates paused")
+        self.timer.stop()  # Pause the countdown
+        logger.info("Session paused")
         return True
     
     def resume(self):
-        """Resume market updates"""
-        if not self.session_active:
-            logger.warning("No active session to resume")
-            return False
-            
-        if not self.pause_lock:
-            logger.warning("Session is not paused")
+        """Enhanced resume with timer resume"""
+        if not self.session_active or not self.pause_lock:
             return False
             
         self.pause_lock = False
-        self.last_update = time.time()
-        logger.info("Market updates resumed")
+        self.timer.start()  # Resume the countdown
+        logger.info("Session resumed")
         return True
     
     def update_market_conditions(self):
