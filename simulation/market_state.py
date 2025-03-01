@@ -120,38 +120,13 @@ def update_stock_price(stock, new_price, is_percent_change=False):
         price_change = ((new_price - current_price) / current_price) * 100
         logger.info(f"Price change: {stock} changed by {price_change:+.2f}% to ${new_price:.2f}")
         
+        # Save the updated state
+        save_market_state()
+        
         return True
         
     except Exception as e:
         logger.error(f"Error updating stock price: {str(e)}")
-        return False
-
-# Fix the admin_override_price function to handle empty stock name
-def admin_override_price(stock, new_price):
-    """Admin override for stock price with improved validation"""
-    # Check for empty stock name
-    if not stock:
-        logger.error("Cannot override: Empty stock name")
-        return False
-    
-    if stock not in stock_prices:
-        logger.error(f"Cannot override: Invalid stock symbol: {stock}")
-        return False
-        
-    if new_price <= 0:
-        logger.error(f"Cannot override: Invalid price value: {new_price}")
-        return False
-            
-    try:
-        # Record last price
-        last_prices[stock] = stock_prices[stock]
-        
-        # Set the new price directly
-        stock_prices[stock] = new_price
-        logger.info(f"Admin override: {stock} price set to ${new_price:.2f}")
-        return True
-    except Exception as e:
-        logger.error(f"Price override failed: {str(e)}")
         return False
 
 def save_market_state():
@@ -464,31 +439,37 @@ def reset_team_portfolio(team_id):
         return True
     return False
 
-# Fix the admin_place_order function to handle empty stock name
-def admin_place_order(team_id, stock, quantity, order_type):
-    """Process admin-placed orders with improved validation"""
-    # Check for empty stock name
-    if not stock:
-        logger.error("Cannot place order: Empty stock name")
+def admin_place_order(team_id, stock, quantity, order_type, admin_key=None):
+    """Process admin-placed orders for teams with validation"""
+    # Validate admin privileges
+    if admin_key != "admin123":  # Simple validation - should be more secure in production
+        logger.error("Unauthorized admin order attempt")
         return False
-        
+
+    # Remove direct session check
+    # Instead, implement a function to check session status
+    if not is_trading_active():
+        logger.error("Cannot place order: No active trading session")
+        return False
+
+    # Ensure team exists and initialize if needed
     if team_id not in team_portfolios:
         logger.error(f"Invalid team ID: {team_id}")
         return False
-        
-    if stock not in stock_prices:
-        logger.error(f"Invalid stock symbol: {stock}")
-        return False
-        
-    if quantity <= 0:
-        logger.error("Quantity must be positive")
-        return False
-    
-    # Log the attempt with clear debugging info
-    logger.info(f"Admin attempting to place {order_type} order: {quantity} {stock} for Team {team_id}")
-    
-    # The rest of the function remains unchanged
-    # ...existing code...
+
+    order = {
+        'stock': stock,
+        'quantity': quantity,
+        'type': order_type,
+        'timestamp': time.time(),
+        'admin_placed': True
+    }
+
+    # Validate and process the order
+    if validate_order(order):
+        # For admin orders, skip team order validation
+        return process_market_order(team_id, order)
+    return False
 
 def is_trading_active():
     """Check if trading is currently active"""
