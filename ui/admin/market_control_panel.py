@@ -333,12 +333,30 @@ class MarketControlPanel(QWidget):
             self.log_text.append(f"Failed to override price for {stock}")
 
     def start_session(self):
-        if market_session.start_session():
-            self.log_text.append("New trading session started")
-            self.update_button_states(True)
-            self.update_session_status()
-        else:
-            self.log_text.append("Failed to start session")
+        """Enhanced session start with better feedback"""
+        try:
+            if market_session.session_active:
+                self.log_text.append("Error: Session already active")
+                return False
+
+            # Initialize market state before starting
+            market_state.initialize_market()
+            
+            if market_session.start_session():
+                self.log_text.append("New trading session started successfully")
+                self.update_button_states(True)
+                self.update_session_status()
+                # Update displays immediately
+                self.update_price_display()
+                self.update_stock_list()
+                return True
+            else:
+                self.log_text.append("Failed to start session")
+                return False
+                
+        except Exception as e:
+            self.log_text.append(f"Error starting session: {str(e)}")
+            return False
 
     def end_session(self):
         if market_session.end_session():

@@ -47,7 +47,7 @@ def main():
         # Create the application
         app = QApplication(sys.argv)
         
-        # Initialize market before creating UI
+        # Initialize market state but don't start session
         from simulation import market_state
         market_state.initialize_market()
         logger.info("Market initialized with stocks: " + ", ".join(market_state.stock_prices.keys()))
@@ -61,12 +61,8 @@ def main():
         market_timer.timeout.connect(market_session.update)
         market_timer.start(MARKET_UPDATE_INTERVAL)
         
-        # Start the market session
-        if market_session.start_session():
-            logger.info("Market session started successfully")
-        else:
-            logger.error("Failed to start market session")
-            return 1
+        # Remove automatic session start
+        logger.info("System ready - waiting for manual session start")
         
         # Start the event loop
         return app.exec_()

@@ -320,19 +320,12 @@ class MarketSession:
         logger.info("Market initialized - ready for session start")
 
     def start_session(self):
-        """Enhanced session start with proper initialization and notifications"""
+        """Enhanced session start with proper initialization"""
         if self.session_active:
             logger.warning("A session is already active")
             return False
             
-        if self.current_session >= self.max_sessions:
-            logger.warning("All trading sessions completed")
-            return False
-            
         try:
-            # Initialize if not already done - ALWAYS initialize to ensure fresh start
-            self.initialize_session()
-            
             # Reset session parameters
             self.current_session += 1
             self.start_time = time.time()
@@ -349,19 +342,7 @@ class MarketSession:
             self.session_active = True
             self.is_active = True
             
-            # Reset prices to initial state
-            market_state.stock_prices = self.initial_prices.copy()
-            market_state.trading_volume = {stock: 0 for stock in market_state.stock_prices}
-            
-            # Initialize price history for the session
-            market_state.price_history = {stock: [market_state.stock_prices[stock]] 
-                                         for stock in market_state.stock_prices}
-            
             logger.info(f"Trading Session {self.current_session} started")
-            
-            # Broadcast an event that session started (can be useful for UI components)
-            logger.info("Notifying all components that session has started")
-            
             return True
             
         except Exception as e:
