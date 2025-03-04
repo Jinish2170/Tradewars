@@ -188,8 +188,9 @@ def save_market_state():
     try:
         db.save_market_state(stock_prices, available_quantities)
         # Add price history to saved state
-        if len(price_history.get(stock, [])) > 100:
-            price_history[stock] = price_history[stock][-100:]
+        for symbol in stock_prices.keys():  # Changed from using undefined 'stock'
+            if len(price_history.get(symbol, [])) > 100:
+                price_history[symbol] = price_history[symbol][-100:]
         return True
     except Exception as e:
         logger.error(f"Error saving market state: {str(e)}")

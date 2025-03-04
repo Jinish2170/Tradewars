@@ -20,7 +20,15 @@ class MarketTrend:
 
 class MarketSimulation:
     def __init__(self):
-        self.state = {}  # example state container
+        self.state = {
+            'trend_duration': 0,  # How long current trend has lasted
+            'trend_strength': 1.0,  # Current trend strength (1.0 to 2.0)
+            'market_momentum': 0.0,  # Market momentum (-1.0 to 1.0)
+            'sector_performance': {},  # Track sector-specific trends
+            'volatility_factors': {},  # Per-stock volatility
+        }
+        self.trend_change_probability = 0.05  # 5% chance to change trend
+        self.max_trend_duration = 300  # Maximum trend duration in seconds
 
     def inject_IPO(self, ipo_data):
         logging.info("Injecting IPO with data: %s", ipo_data)
@@ -51,7 +59,7 @@ class MarketSimulation:
         for stock in affected_stocks:
             if stock in market_state.stock_prices:
                 current_price = market_state.stock_prices[stock]
-                new_price = calculate_new_price(current_price, 0, impact)
+                new_price = calculate_new_price(current_price, 0, impact, stock)  # Pass stock parameter
                 market_state.stock_prices[stock] = new_price
         db.log_event(
             event_type="news",
@@ -61,6 +69,91 @@ class MarketSimulation:
         )
         market_state.save_market_state()
 
+    def update_market_dynamics(self):
+        """Update market dynamics including trends, momentum, and sector performance"""
+        global current_trend, volatility_factor, market_sentiment
+        
+        # Update trend duration and check for trend change
+        self.state['trend_duration'] += 1
+        trend_age_factor = min(self.state['trend_duration'] / self.max_trend_duration, 1.0)
+        
+        # Increased chance of trend reversal as trend ages
+        trend_change_chance = self.trend_change_probability * (1 + trend_age_factor)
+        
+        if random.random() < trend_change_chance or self.state['trend_duration'] >= self.max_trend_duration:
+            # Reverse trend
+            current_trend = -current_trend
+            self.state['trend_duration'] = 0
+            self.state['trend_strength'] = 1.0 + random.uniform(0.2, 0.8)  # New trend strength
+            logger.info(f"Market trend changed to {'Bullish' if current_trend == MarketTrend.BULLISH else 'Bearish'}")
+        
+        # Update market momentum
+        momentum_change = random.uniform(-0.1, 0.1)
+        self.state['market_momentum'] = max(-1.0, min(1.0, 
+            self.state['market_momentum'] + momentum_change * self.state['trend_strength']))
+        
+        # Update sector performance
+        self._update_sector_trends()
+        
+        # Update volatility
+        self._update_volatility()
+
+    def _update_sector_trends(self):
+        """Update sector-specific market trends"""
+        sectors = {stock['sector'] for stock in market_state.STOCK_DETAILS.values()}
+        
+        for sector in sectors:
+            if sector not in self.state['sector_performance']:
+                self.state['sector_performance'][sector] = 0.0
+            
+            # Update sector performance with trend influence
+            sector_change = random.uniform(-0.05, 0.05) * self.state['trend_strength']
+            current_perf = self.state['sector_performance'][sector]
+            
+            # Add trend bias
+            trend_bias = 0.02 * current_trend * self.state['trend_strength']
+            
+            # Calculate new performance with mean reversion
+            new_perf = current_perf + sector_change + trend_bias
+            new_perf *= 0.95  # Mean reversion factor
+            
+            self.state['sector_performance'][sector] = max(-0.2, min(0.2, new_perf))
+
+    def _update_volatility(self):
+        """Update stock-specific volatility factors"""
+        global volatility_factor
+        
+        base_volatility = volatility_factor
+        
+        for stock in market_state.stock_prices.keys():
+            if stock not in self.state['volatility_factors']:
+                self.state['volatility_factors'][stock] = 1.0
+            
+            # Get stock's sector
+            sector = market_state.STOCK_DETAILS[stock]['sector']
+            sector_impact = abs(self.state['sector_performance'].get(sector, 0))
+            
+            # Calculate stock-specific volatility
+            vol_change = random.uniform(-0.1, 0.1)
+            stock_vol = self.state['volatility_factors'][stock]
+            
+            # Include sector and momentum effects
+            new_vol = stock_vol + vol_change + (sector_impact * 0.5)
+            new_vol *= 0.95  # Mean reversion
+            
+            # Apply limits
+            self.state['volatility_factors'][stock] = max(0.5, min(2.0, new_vol))
+
+    def get_stock_modifiers(self, stock):
+        """Get all price modifiers for a specific stock"""
+        sector = market_state.STOCK_DETAILS[stock]['sector']
+        return {
+            'trend': current_trend * self.state['trend_strength'],
+            'momentum': self.state['market_momentum'],
+            'sector': self.state['sector_performance'].get(sector, 0),
+            'volatility': self.state['volatility_factors'].get(stock, 1.0)
+        }
+
 # Module-level instance for backward compatibility
 market_simulation = MarketSimulation()
 
@@ -69,69 +162,33 @@ current_trend = MarketTrend.NEUTRAL
 volatility_factor = 1.0
 market_sentiment = 0  # Range: -1 to 1
 
-def calculate_new_price(old_price, net_demand, news_impact):
-    """Enhanced price calculation with market depth and liquidity factors."""
-    global volatility_factor, market_sentiment
+def calculate_new_price(old_price, net_demand, news_impact, stock):  # Add stock parameter
+    """Enhanced price calculation with improved market dynamics"""
+    mods = market_simulation.get_stock_modifiers(stock)
     
-    # Input validation and normalization
-    old_price = max(0.01, old_price)
-    net_demand = max(-1.0, min(1.0, net_demand))
-    news_impact = max(-1.0, min(1.0, news_impact))
+    # Base calculations
+    trend_impact = mods['trend'] * 0.001  # 0.1% base trend effect
+    momentum_impact = mods['momentum'] * 0.002  # 0.2% momentum effect
+    sector_impact = mods['sector'] * 0.003  # 0.3% sector effect
     
-    # Enhanced market depth factor - exponential impact for larger orders
-    depth_factor = math.exp(abs(net_demand)) - 1
+    # Apply volatility to all effects
+    volatility = mods['volatility']
     
-    # Enhanced liquidity adjustment based on trading volume
-    volume_factor = min(1.0, market_state.trading_volume.get(stock, 0) / 1000)
-    liquidity_factor = 1.0 + (volatility_factor - 1.0) * 0.5 * (1 - volume_factor)
-    
-    # Calculate price pressure from order size
-    price_pressure = net_demand * DEMAND_COEFFICIENT * depth_factor * liquidity_factor
-    
-    # Market momentum factor
-    momentum = calculate_momentum(stock)
-    
-    # Enhanced market factors
-    demand_impact = price_pressure * (1 + momentum)
-    news_effect = news_impact * EVENT_COEFFICIENT * volatility_factor
-    sentiment_impact = market_sentiment * 0.01 * volatility_factor
-    
-    # Dynamic volatility adjustment
-    vol_modifier = 1.0 + (abs(net_demand) * volatility_factor * momentum)
-    noise = (random.random() - 0.5) * RANDOM_NOISE * vol_modifier
-    
-    # Weighted impact calculation with dynamic weights
-    weights = {
-        'demand': 0.5 * liquidity_factor,  # Increased importance of demand
-        'news': 0.2 * volatility_factor,
-        'sentiment': 0.2,
-        'noise': 0.1 * vol_modifier
-    }
-    
-    # Normalize weights
-    weight_sum = sum(weights.values())
-    weights = {k: v/weight_sum for k, v in weights.items()}
-    
-    # Calculate total impact
+    # Calculate final impact
     total_impact = (
-        demand_impact * weights['demand'] +
-        news_effect * weights['news'] +
-        sentiment_impact * weights['sentiment'] +
-        noise * weights['noise']
+        (trend_impact + momentum_impact + sector_impact) * volatility +
+        net_demand * DEMAND_COEFFICIENT +
+        news_impact * EVENT_COEFFICIENT
     )
     
-    # Apply non-linear dampening for large movements
-    if abs(total_impact) > 0.1:
-        total_impact = math.copysign(math.log(1 + abs(total_impact)), total_impact)
+    # Add noise scaled by volatility
+    noise = random.uniform(-0.001, 0.001) * volatility
+    total_impact += noise
     
-    # Calculate new price with momentum consideration
+    # Calculate new price
     new_price = old_price * (1 + total_impact)
     
-    # Apply circuit breakers
-    max_change = 0.1 * (1 + volatility_factor)  # Dynamic circuit breaker
-    if abs(new_price - old_price) / old_price > max_change:
-        new_price = old_price * (1 + max_change * math.copysign(1, new_price - old_price))
-    
+    # Ensure minimum price
     return max(0.01, new_price)
 
 def calculate_momentum(stock):
@@ -178,7 +235,8 @@ def process_order(order):
     new_price = calculate_new_price(
         current_price,
         net_demand,
-        trend_impact
+        trend_impact,
+        stock  # Add stock parameter here too
     )
     
     # Update market state
@@ -308,6 +366,7 @@ class MarketSession:
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_session_time)
         self.timer.setInterval(1000)  # Update every second
+        self.news_impacts = {}  # Add this to track active news impacts
 
     def initialize_session(self):
         """Initialize session without resetting market state"""
@@ -494,7 +553,37 @@ class MarketSession:
             current_price = market_state.stock_prices[stock]
             new_price = current_price * (1 + total_change)
             market_state.stock_prices[stock] = max(0.01, new_price)
-    
+        
+        # Process gradual news impacts
+        for stock, impact in list(self.news_impacts.items()):
+            if impact['remaining_time'] <= 0:
+                del self.news_impacts[stock]
+                continue
+                
+            # Calculate how much to change this update
+            time_ratio = 1.0 / impact['total_time']
+            target_price = impact['start_price'] * (1 + impact['target_percent'] / 100.0)
+            current_price = market_state.stock_prices[stock]
+            
+            # Add some randomness to the path
+            progress_step = time_ratio * random.uniform(0.8, 1.2)
+            impact['current_progress'] = min(1.0, impact['current_progress'] + progress_step)
+            
+            # Calculate new price with some noise
+            progress = impact['current_progress']
+            ideal_price = impact['start_price'] + (target_price - impact['start_price']) * progress
+            noise = random.uniform(-0.001, 0.001) * current_price
+            new_price = ideal_price + noise
+            
+            # Ensure we don't overshoot the target
+            if impact['target_percent'] < 0:
+                new_price = max(new_price, target_price)
+            else:
+                new_price = min(new_price, target_price)
+                
+            market_state.stock_prices[stock] = max(0.01, new_price)
+            impact['remaining_time'] -= 1
+
     def log_market_status(self):
         """Log current market status."""
         from simulation import market_state
@@ -572,6 +661,21 @@ class MarketSession:
 
         portfolio['total_value'] = total_value
         portfolio['holdings_value'] = total_value - portfolio['cash']
+
+    def add_news_impact(self, stocks, target_percent, duration=None):
+        """Add news impact target for gradual price changes"""
+        if duration is None:
+            duration = self.time_remaining
+            
+        for stock in stocks:
+            self.news_impacts[stock] = {
+                'target_percent': target_percent,
+                'start_price': market_state.stock_prices[stock],
+                'remaining_time': duration,
+                'total_time': duration,
+                'current_progress': 0.0
+            }
+        logger.info(f"Added news impact target: {stocks} -> {target_percent}% over {duration}s")
 
 def admin_place_order(team_id, stock, quantity, order_type, admin_key=None):
     """Process admin-placed orders for teams with admin validation"""
