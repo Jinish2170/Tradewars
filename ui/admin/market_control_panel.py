@@ -401,15 +401,13 @@ class MarketControlPanel(QWidget):
             self.log_text.append(f"Failed to override price for {stock}")
 
     def start_session(self):
-        """Enhanced session start with better feedback"""
+        """Start session without resetting market state"""
         try:
             if market_session.session_active:
                 self.log_text.append("Error: Session already active")
                 return False
 
-            # Initialize market state before starting
-            market_state.initialize_market()
-            
+            # Remove market state initialization - preserve existing holdings
             if market_session.start_session():
                 self.log_text.append("New trading session started successfully")
                 self.update_button_states(True)
@@ -472,21 +470,19 @@ class MarketControlPanel(QWidget):
         self.end_session_btn.setEnabled(is_session_active)
         self.pause_btn.setEnabled(is_session_active and not is_paused)
         self.resume_btn.setEnabled(is_session_active and is_paused)
-        self.override_btn.setEnabled(is_session_active and not is_paused)
-        self.place_order_btn.setEnabled(is_session_active and not is_paused)
-        self.apply_change_btn.setEnabled(is_session_active and not is_paused)
+        # Always enable trading buttons
+        self.override_btn.setEnabled(True)
+        self.place_order_btn.setEnabled(True)
+        self.apply_change_btn.setEnabled(True)
 
     def place_team_order(self):
-        """Enhanced team order placement with adjusted team ID calculation"""
-        if not market_session.session_active:
-            self.log_text.append("Cannot place order: No active session")
-            return
-            
-        team_id = int(self.team_selector.currentText().split()[-1]) - 1  # Subtract 1 to convert to 0-based index
-        stock = self.team_order_stock_selector.currentText()  # Use separate selector
+        """Enhanced team order placement with no session validation"""
+        team_id = int(self.team_selector.currentText().split()[-1]) - 1
+        stock = self.team_order_stock_selector.currentText()
         quantity = self.quantity_spinner.value()
         order_type = self.order_type.currentText()
         
+        # Remove session check
         # Validate quantity
         if quantity <= 0:
             self.log_text.append("Error: Quantity must be positive")

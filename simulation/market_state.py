@@ -198,18 +198,8 @@ def save_market_state():
 @safe_operation
 def process_market_order(team_id, order):
     """Process a market order with enhanced validation and feedback"""
-    from simulation.market_simulation import market_session
-    
     try:
-        # Validate session state
-        if not market_session.session_active:
-            logger.error("Cannot process order: No active trading session")
-            return False
-        
-        if market_session.pause_lock:
-            logger.error("Cannot process order: Session is paused")
-            return False
-        
+        # Remove session validation checks
         # Validate order basics
         if not validate_order(order):
             logger.error(f"Invalid order format: {order}")
@@ -495,18 +485,11 @@ def reset_team_portfolio(team_id):
 
 def admin_place_order(team_id, stock, quantity, order_type, admin_key=None):
     """Process admin-placed orders for teams with validation"""
-    # Validate admin privileges
+    # Remove session checks
     if admin_key != "admin123":  # Simple validation - should be more secure in production
         logger.error("Unauthorized admin order attempt")
         return False
 
-    # Remove direct session check
-    # Instead, implement a function to check session status
-    if not is_trading_active():
-        logger.error("Cannot place order: No active trading session")
-        return False
-
-    # Ensure team exists and initialize if needed
     if team_id not in team_portfolios:
         logger.error(f"Invalid team ID: {team_id}")
         return False
@@ -527,8 +510,8 @@ def admin_place_order(team_id, stock, quantity, order_type, admin_key=None):
 
 def is_trading_active():
     """Check if trading is currently active"""
-    # This can be enhanced with more sophisticated checks
-    return True  # Default to True for now
+    # Always return True to allow trading at any time
+    return True
 
 def get_session_summary(team_id):
     """Get team's performance summary for current session"""

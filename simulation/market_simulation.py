@@ -151,7 +151,7 @@ def calculate_momentum(stock):
     return momentum
 
 def process_order(order):
-    """Enhanced order processing with market impact"""
+    """Enhanced order processing with market impact - no session validation"""
     stock = order['stock']
     quantity = order['quantity']
     order_type = order['type']
@@ -310,29 +310,21 @@ class MarketSession:
         self.timer.setInterval(1000)  # Update every second
 
     def initialize_session(self):
-        """Always initialize market state properly"""
-        from simulation import market_state
-        
-        # Initialize market state first
-        market_state.initialize_market()
-        logger.info("Market state initialized with stocks: " + ", ".join(market_state.stock_prices.keys()))
-        
-        # Store initial prices as reference
+        """Initialize session without resetting market state"""
+        # Remove market state initialization
+        # Only store initial prices for reference
         self.initial_prices = market_state.stock_prices.copy()
-        
-        # Set initialized flag
         self.initialized = True
-        
-        logger.info("Market initialized - ready for session start")
+        logger.info("Market session initialized - preserving existing holdings")
 
     def start_session(self):
-        """Enhanced session start with timer"""
+        """Enhanced session start without resetting market state"""
         if self.session_active:
             logger.warning("A session is already active")
             return False
             
         try:
-            # Reset session parameters
+            # Remove market state initialization
             self.current_session += 1
             self.start_time = time.time()
             self.last_update = self.start_time
@@ -512,7 +504,7 @@ class MarketSession:
         logger.info(f"Volumes: {state['volumes']}")
 
     def process_market_order(self, team_id, order):
-        """Enhanced order processing with better portfolio management"""
+        """Enhanced order processing with better portfolio management - no session validation"""
         portfolio = market_state.team_portfolios.get(team_id)
         if not portfolio:
             return False
@@ -583,13 +575,9 @@ class MarketSession:
 
 def admin_place_order(team_id, stock, quantity, order_type, admin_key=None):
     """Process admin-placed orders for teams with admin validation"""
-    # Validate admin privileges
+    # Remove session check
     if not validate_admin(admin_key):
         logger.error("Unauthorized admin order attempt")
-        return False
-
-    if not market_session.session_active:
-        logger.error("Cannot place order: No active trading session")
         return False
 
     if team_id not in market_state.team_portfolios:
