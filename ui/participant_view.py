@@ -376,15 +376,25 @@ class ParticipantView(QWidget):
         market_tab_layout.setContentsMargins(15, 15, 15, 15)
         market_tab_layout.setSpacing(15)
         
-        # Create market data table
+        # Create market data table with larger fonts
         self.market_table = QTableWidget()
         self.market_table.setColumnCount(6)
         self.market_table.setHorizontalHeaderLabels(["Symbol", "Price", "Change", "Trend", "Volume", "Available"])
-        self.market_table.setStyleSheet(MODERN_TABLE_STYLE)
+        self.market_table.setStyleSheet(MODERN_TABLE_STYLE + f"""
+            QTableWidget {{
+                font-size: 14px;  /* Increased base font size */
+            }}
+            QHeaderView::section {{
+                font-size: 14px;  /* Increased header font size */
+                padding: 12px 8px;  /* More vertical padding for headers */
+            }}
+        """)
         self.market_table.setAlternatingRowColors(True)
         self.market_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.market_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.market_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.market_table.verticalHeader().setDefaultSectionSize(45)  # Increased row height
+        self.market_table.horizontalHeader().setMinimumHeight(45)  # Increased header height
         
         market_tab_layout.addWidget(self.market_table)
         
@@ -538,19 +548,25 @@ class ParticipantView(QWidget):
         symbols = market_state.stock_prices.keys()
         self.market_table.setRowCount(len(symbols))
         
+        font = QFont()
+        font.setPointSize(14)  # Consistent font size for all cells
+        
         for row, symbol in enumerate(symbols):
-            # Symbol
+            # Symbol with larger font
             symbol_item = QTableWidgetItem(symbol)
+            symbol_item.setFont(font)
             
             # Price with formatting
             price = market_data['prices'].get(symbol, 0)
             price_item = QTableWidgetItem(f"${price:,.2f}")
             price_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            price_item.setFont(font)
             
             # Change percentage
             change = market_data['price_changes'].get(symbol, 0)
             change_item = QTableWidgetItem(f"{change:+.2f}%")
             change_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            change_item.setFont(font)
             
             # Set color based on change
             if change > 0:
@@ -558,9 +574,10 @@ class ParticipantView(QWidget):
             elif change < 0:
                 change_item.setForeground(QColor(THEME['negative']))
             
-            # Trend indicator
+            # Trend indicator with larger font
             trend_item = QTableWidgetItem("▲" if change >= 0 else "▼")
             trend_item.setTextAlignment(Qt.AlignCenter)
+            trend_item.setFont(font)
             if change > 0:
                 trend_item.setForeground(QColor(THEME['positive']))
             elif change < 0:
@@ -568,15 +585,17 @@ class ParticipantView(QWidget):
             else:
                 trend_item.setForeground(QColor(THEME['neutral']))
             
-            # Volume
+            # Volume with larger font
             volume = market_data['volumes'].get(symbol, 0)
             volume_item = QTableWidgetItem(f"{volume:,}")
             volume_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            volume_item.setFont(font)
             
-            # Available quantity
+            # Available quantity with larger font
             available = market_data['quantities'].get(symbol, 0)
             available_item = QTableWidgetItem(f"{available:,}")
             available_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            available_item.setFont(font)
             
             # Add items to table
             self.market_table.setItem(row, 0, symbol_item)
