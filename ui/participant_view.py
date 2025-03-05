@@ -341,7 +341,10 @@ class ParticipantView(QWidget):
         
         main_layout.addWidget(price_section)
         
-        # Main content area with tabs
+        # Main content area with horizontal split
+        main_content = QHBoxLayout()
+        
+        # Left side: Tabs for market data and team rankings
         content_tabs = QTabWidget()
         content_tabs.setStyleSheet(f"""
             QTabWidget::pane {{
@@ -385,51 +388,73 @@ class ParticipantView(QWidget):
         
         market_tab_layout.addWidget(self.market_table)
         
-        # Replace Portfolio tab with Team Performance tab
+        # Team Rankings tab with increased height
         team_performance_tab = QWidget()
         team_layout = QVBoxLayout(team_performance_tab)
         team_layout.setContentsMargins(15, 15, 15, 15)
-        team_layout.setSpacing(8)  # Reduced spacing between elements
+        team_layout.setSpacing(8)
         
-        # Team performance table directly at the top
+        # Team performance table
         teams_frame = QFrame()
         teams_frame.setObjectName("Card")
         teams_frame.setStyleSheet(CARD_STYLE)
         
         teams_layout = QVBoxLayout(teams_frame)
         teams_layout.setContentsMargins(15, 12, 15, 12)
-        teams_layout.setSpacing(8)  # Reduced spacing inside frame
+        teams_layout.setSpacing(8)
         
-        # Teams header
         teams_header = QHBoxLayout()
         teams_title = QLabel("Team Rankings")
         teams_title.setStyleSheet(f"color: {THEME['text']}; font-size: 16px; font-weight: bold;")
         teams_header.addWidget(teams_title)
         teams_layout.addLayout(teams_header)
         
-        # Team rankings table with more vertical space
+        # Team rankings table with more height and larger fonts
         self.teams_table = QTableWidget()
         self.teams_table.setColumnCount(5)
         self.teams_table.setHorizontalHeaderLabels(["Team", "Cash", "Holdings Value", "Total Value", "% Change"])
-        self.teams_table.setStyleSheet(MODERN_TABLE_STYLE)
+        self.teams_table.setStyleSheet(MODERN_TABLE_STYLE + f"""
+            QTableWidget {{
+                font-size: 14px;  /* Increased base font size */
+            }}
+            QHeaderView::section {{
+                font-size: 14px;  /* Increased header font size */
+                padding: 12px 8px;  /* More vertical padding for headers */
+            }}
+        """)
         self.teams_table.setAlternatingRowColors(True)
         self.teams_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.teams_table.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.teams_table.verticalHeader().setDefaultSectionSize(30)  # Optimize row height
-        self.teams_table.setMinimumHeight(400)  # Give enough space for all teams
+        self.teams_table.verticalHeader().setDefaultSectionSize(45)  # Increased row height
+        self.teams_table.horizontalHeader().setMinimumHeight(45)  # Increased header height
         
         teams_layout.addWidget(self.teams_table)
+        team_layout.addWidget(teams_frame)
         
-        # Market transactions log with reduced height
-        log_layout = QVBoxLayout()
-        log_layout.setSpacing(4)  # Reduced spacing
-        log_title = QLabel("Recent Market Activity")
-        log_title.setStyleSheet(f"color: {THEME['text']}; font-size: 16px; font-weight: bold;")
-        log_layout.addWidget(log_title)
+        # Add tabs
+        content_tabs.addTab(market_tab, "Market Data")
+        content_tabs.addTab(team_performance_tab, "Team Rankings")
         
+        # Right side: Market Activity Panel
+        activity_panel = QFrame()
+        activity_panel.setObjectName("Card")
+        activity_panel.setStyleSheet(CARD_STYLE)
+        activity_panel.setMaximumWidth(400)  # Limit width of activity panel
+        
+        activity_layout = QVBoxLayout(activity_panel)
+        activity_layout.setContentsMargins(15, 12, 15, 12)
+        activity_layout.setSpacing(8)
+        
+        # Activity panel header
+        activity_header = QHBoxLayout()
+        activity_title = QLabel("Recent Market Activity")
+        activity_title.setStyleSheet(f"color: {THEME['text']}; font-size: 16px; font-weight: bold;")
+        activity_header.addWidget(activity_title)
+        activity_layout.addLayout(activity_header)
+        
+        # Market activity log
         self.market_log = QTextEdit()
         self.market_log.setReadOnly(True)
-        self.market_log.setFixedHeight(100)  # Reduced height
         self.market_log.setStyleSheet(f"""
             QTextEdit {{
                 background-color: {THEME['header']};
@@ -440,18 +465,16 @@ class ParticipantView(QWidget):
                 padding: 8px;
             }}
         """)
-        log_layout.addWidget(self.market_log)
+        activity_layout.addWidget(self.market_log)
         
-        teams_layout.addLayout(log_layout)
-        team_layout.addWidget(teams_frame)
+        # Add both panels to main content
+        main_content.addWidget(content_tabs, 2)  # Give more space to tabs
+        main_content.addWidget(activity_panel, 1)  # Give less space to activity panel
         
-        # Add tabs to tab widget
-        content_tabs.addTab(market_tab, "Market Data")
-        content_tabs.addTab(team_performance_tab, "Team Rankings")  # Changed tab name
+        # Add main content to the main layout
+        main_layout.addLayout(main_content, 1)
         
-        main_layout.addWidget(content_tabs, 1)  # Give it stretch factor for responsive sizing
-        
-        # News ticker at bottom
+        # News ticker remains at bottom
         news_ticker = QFrame()
         news_ticker.setFixedHeight(30)
         news_ticker.setStyleSheet(f"background-color: {THEME['header']}; border-radius: 4px;")
@@ -606,24 +629,35 @@ class ParticipantView(QWidget):
                     team_item.setForeground(QColor(THEME['accent']))
                     font = team_item.font()
                     font.setBold(True)
+                    font.setPointSize(14)  # Increased font size for top teams
+                    team_item.setFont(font)
+                else:
+                    font = team_item.font()
+                    font.setPointSize(14)  # Consistent font size for all teams
                     team_item.setFont(font)
                 
                 # Cash
                 cash_item = QTableWidgetItem(f"${team_data['cash']:,.2f}")
                 cash_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                font = cash_item.font()
+                font.setPointSize(14)
+                cash_item.setFont(font)
                 
                 # Holdings value
                 holdings_item = QTableWidgetItem(f"${team_data['holdings_value']:,.2f}")
                 holdings_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                holdings_item.setFont(font)
                 
                 # Total value
                 total_item = QTableWidgetItem(f"${team_data['total_value']:,.2f}")
                 total_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                total_item.setFont(font)
                 
                 # Percent change
                 percent = team_data['profit_percent']
                 percent_item = QTableWidgetItem(f"{percent:+.2f}%")
                 percent_item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                percent_item.setFont(font)
                 
                 if percent > 0:
                     percent_item.setForeground(QColor(THEME['positive']))
