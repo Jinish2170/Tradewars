@@ -53,21 +53,22 @@ class MarketSimulation:
         thread.start()
 
     def _process_news_event(self, event_data):
-        logging.info("Processing news event: %s", event_data)
+        """Process news events directly with exact percentage"""
         affected_stocks = event_data.get('stocks', [])
         impact = event_data.get('impact', 0)
-        for stock in affected_stocks:
-            if stock in market_state.stock_prices:
-                current_price = market_state.stock_prices[stock]
-                new_price = calculate_new_price(current_price, 0, impact, stock)  # Pass stock parameter
-                market_state.stock_prices[stock] = new_price
+        
+        # Impact is already the exact percentage we want (e.g., 100 for 100%)
+        # Do NOT convert it - pass it directly
+        market_session.add_news_impact(affected_stocks, impact)
+        logger.info(f"News impact queued: {impact}% for {affected_stocks}")
+        
+        # Log the event only
         db.log_event(
             event_type="news",
             description=event_data.get('description', ''),
             affected_stocks=affected_stocks,
             impact=impact
         )
-        market_state.save_market_state()
 
     def update_market_dynamics(self):
         """Update market dynamics including trends, momentum, and sector performance"""
@@ -110,7 +111,7 @@ class MarketSimulation:
             sector_change = random.uniform(-0.05, 0.05) * self.state['trend_strength']
             current_perf = self.state['sector_performance'][sector]
             
-            # Add trend bias
+            # Add trend bias - Fix the missing closing quote
             trend_bias = 0.02 * current_trend * self.state['trend_strength']
             
             # Calculate new performance with mean reversion
@@ -301,23 +302,34 @@ class PriceFluctuationManager:
                 self.last_update[stock] = current_time
     
     def _fluctuate_stock_price(self, stock):
-        """Enhanced random price fluctuation with more unpredictable behavior"""
+        """Enhanced random price fluctuation with more realistic behavior"""
         settings = self.stock_settings[stock]
         
-        # Increased randomness in price changes
-        base_change = random.uniform(-0.015, 0.015)  # Wider range
+        # More realistic, smaller base changes
+        base_change = random.uniform(-0.004, 0.004)  # Reduced from (-0.015, 0.015)
         
-        # Add random market shock events (5% chance)
-        if random.random() < 0.05:
-            shock_multiplier = random.choice([-2.5, -2.0, 2.0, 2.5])
+        # Add rare market shock events (3% chance instead of 5%)
+        if random.random() < 0.03:
+            shock_multiplier = random.choice([-2.0, -1.5, 1.5, 2.0])
             base_change *= shock_multiplier
         
-        # Add occasional trend reversal
-        if random.random() < 0.15:  # 15% chance of trend reversal
-            base_change *= -1.5
+        # Add gradual trend component for smoother changes
+        if not hasattr(self, 'stock_trends'):
+            self.stock_trends = {}
+        if stock not in self.stock_trends:
+            self.stock_trends[stock] = random.uniform(-0.001, 0.001)
         
-        # Add some noise to prevent predictable patterns
-        noise = random.gauss(0, 0.005)
+        # Gradually shift the trend direction
+        if random.random() < 0.10:  # 10% chance to adjust trend
+            self.stock_trends[stock] += random.uniform(-0.0005, 0.0005)
+            # Keep trend within bounds
+            self.stock_trends[stock] = max(-0.002, min(0.002, self.stock_trends[stock]))
+        
+        # Apply the trend
+        base_change += self.stock_trends[stock]
+        
+        # Add smaller noise component
+        noise = random.gauss(0, 0.002)  # Reduced from 0.005
         total_change = base_change + noise
         
         # Apply change to current price
@@ -325,11 +337,12 @@ class PriceFluctuationManager:
         new_price = current_price * (1 + total_change)
         
         # Ensure price doesn't change too dramatically
-        max_change = 0.2  # 20% max change per update
+        max_change = 0.1  # Reduced from 0.2 (10% max change per update)
         if abs(total_change) > max_change:
             total_change = math.copysign(max_change, total_change)
             new_price = current_price * (1 + total_change)
         
+        # Apply the new price
         market_state.stock_prices[stock] = max(0.01, new_price)
         
         # Safely update price history
@@ -342,8 +355,8 @@ class PriceFluctuationManager:
         if len(market_state.price_history[stock]) > 100:
             market_state.price_history[stock] = market_state.price_history[stock][-100:]
         
-        # Log significant changes
-        if abs(total_change) > 0.02:
+        # Log significant changes with higher threshold
+        if abs(total_change) > 0.03:  # Changed from 0.02
             logger.info(f"Significant price change for {stock}: {total_change*100:.2f}%")
 
 class MarketSession:
@@ -377,13 +390,13 @@ class MarketSession:
         logger.info("Market session initialized - preserving existing holdings")
 
     def start_session(self):
-        """Enhanced session start without resetting market state"""
+        """Enhanced session start that guarantees impacts are only processed AFTER session is fully active"""
         if self.session_active:
             logger.warning("A session is already active")
             return False
             
         try:
-            # Remove market state initialization
+            # First fully initialize the session
             self.current_session += 1
             self.start_time = time.time()
             self.last_update = self.start_time
@@ -399,11 +412,19 @@ class MarketSession:
             if not self.price_manager:
                 self.price_manager = PriceFluctuationManager()
             
-            # Activate session
+            # Set session active flags BEFORE processing impacts
             self.session_active = True
             self.is_active = True
             
+            # Log session start BEFORE processing impacts
             logger.info(f"Trading Session {self.current_session} started - Duration: 10 minutes")
+            
+            # ONLY NOW, after session is fully active, process impacts
+            # Wait a short time to ensure session has truly started
+            timer = QTimer(singleShot=True)
+            timer.timeout.connect(self._process_pending_impacts)
+            timer.start(1000)  # Process impacts 1 second after session start
+            
             return True
             
         except Exception as e:
@@ -431,12 +452,40 @@ class MarketSession:
             self.end_session()
 
     def end_session(self):
-        """Enhanced session end with timer cleanup"""
+        """Enhanced session end that GUARANTEES all news impacts reach exactly their target"""
         if not self.session_active:
             logger.warning("No active session to end")
             return False
             
         try:
+            # First, process any unfinished news impacts to ensure targets are hit EXACTLY
+            for stock, impact in list(self.news_impacts.items()):
+                # Get the original target values stored when impact was registered
+                start_price = impact['start_price']
+                target_percent = impact['target_percent']
+                target_price = impact['target_price']  # This is the exact price we want
+                
+                # Get the current price before forcing change
+                current_price = market_state.stock_prices[stock]
+                actual_percent = ((current_price - start_price) / start_price) * 100
+                
+                # FORCE the stock price to exactly match the target price
+                market_state.stock_prices[stock] = target_price
+                
+                # Calculate the new actual percentage after forcing the exact price
+                final_percent = ((target_price - start_price) / start_price) * 100
+                
+                # This is critical for debugging - log details about what happened
+                logger.info(f"SESSION END - FORCING TARGET PRICE: {stock}")
+                logger.info(f"  Start price: ${start_price:.2f}")
+                logger.info(f"  Before force: ${current_price:.2f} ({actual_percent:.2f}%)")
+                logger.info(f"  Target: ${target_price:.2f} ({target_percent:.2f}%)")
+                logger.info(f"  After force: ${market_state.stock_prices[stock]:.2f} ({final_percent:.2f}%)")
+                logger.info(f"  VERIFICATION: Target reached exactly: {market_state.stock_prices[stock] == target_price}")
+            
+            # Clear all impacts
+            self.news_impacts.clear()
+            
             # Stop the timer
             self.timer.stop()
             self.time_remaining = self.session_duration
@@ -524,65 +573,43 @@ class MarketSession:
         return True
     
     def update_market_conditions(self):
-        """Enhanced market conditions update with more dynamic factors"""
-        from simulation import market_state
-        
-        for stock in market_state.stock_prices:
-            # More dynamic base movement
-            base_movement = random.gauss(0, 0.002)  # Normal distribution
-            
-            # Dynamic trend influence
-            trend_strength = random.uniform(0.3, 1.0)
-            trend_impact = current_trend * random.uniform(0.0003, 0.0008) * trend_strength
-            
-            # Enhanced volatility impact
-            vol_impact = random.gauss(0, volatility_factor * 0.002)
-            
-            # Market sentiment influence
-            sentiment_impact = market_sentiment * random.uniform(0.0002, 0.0005)
-            
-            # Combine all factors with random weights
-            weights = [random.uniform(0.7, 1.3) for _ in range(4)]
-            total_change = (
-                base_movement * weights[0] +
-                trend_impact * weights[1] +
-                vol_impact * weights[2] +
-                sentiment_impact * weights[3]
-            )
-            
-            current_price = market_state.stock_prices[stock]
-            new_price = current_price * (1 + total_change)
-            market_state.stock_prices[stock] = max(0.01, new_price)
-        
-        # Process gradual news impacts
+        """Simplified price updates for more predictable behavior"""
+        if not self.session_active or self.pause_lock:
+            return
+
+        # Process news impacts first and exclusively
+        if self.news_impacts:
+            self._process_news_impacts()
+            return  # Skip other market movements when we have active impacts
+
+    def _process_news_impacts(self):
+        """Process news impacts with steady progress toward target over 10 minutes"""
         for stock, impact in list(self.news_impacts.items()):
-            if impact['remaining_time'] <= 0:
-                del self.news_impacts[stock]
-                continue
-                
-            # Calculate how much to change this update
-            time_ratio = 1.0 / impact['total_time']
-            target_price = impact['start_price'] * (1 + impact['target_percent'] / 100.0)
             current_price = market_state.stock_prices[stock]
+            target_price = impact['target_price']
+            start_price = impact['start_price']
+
+            # Calculate total distance to move and progress per update
+            total_price_change = target_price - start_price
+            total_steps = 600  # 10 minutes = 600 seconds
+            price_change_per_step = total_price_change / total_steps
             
-            # Add some randomness to the path
-            progress_step = time_ratio * random.uniform(0.8, 1.2)
-            impact['current_progress'] = min(1.0, impact['current_progress'] + progress_step)
+            # Move price by one step
+            new_price = current_price + price_change_per_step
             
-            # Calculate new price with some noise
-            progress = impact['current_progress']
-            ideal_price = impact['start_price'] + (target_price - impact['start_price']) * progress
-            noise = random.uniform(-0.001, 0.001) * current_price
-            new_price = ideal_price + noise
+            # Verify we're moving in the right direction
+            if total_price_change > 0:  # Price should go up
+                new_price = min(new_price, target_price)  # Don't overshoot upward
+            else:  # Price should go down
+                new_price = max(new_price, target_price)  # Don't overshoot downward
             
-            # Ensure we don't overshoot the target
-            if impact['target_percent'] < 0:
-                new_price = max(new_price, target_price)
-            else:
-                new_price = min(new_price, target_price)
-                
-            market_state.stock_prices[stock] = max(0.01, new_price)
-            impact['remaining_time'] -= 1
+            # Update price
+            market_state.stock_prices[stock] = new_price
+            
+            # Calculate and log progress percentage
+            progress = ((new_price - start_price) / (target_price - start_price)) * 100
+            logger.info(f"Stock: {stock} | Progress: {progress:.1f}% | " +
+                       f"Current: ${new_price:.2f} | Target: ${target_price:.2f}")
 
     def log_market_status(self):
         """Log current market status."""
@@ -663,19 +690,64 @@ class MarketSession:
         portfolio['holdings_value'] = total_value - portfolio['cash']
 
     def add_news_impact(self, stocks, target_percent, duration=None):
-        """Add news impact target for gradual price changes"""
-        if duration is None:
-            duration = self.time_remaining
+        """Queue news impacts ONLY, never apply them directly"""
+        logger.info(f"News impact for {stocks} recorded: {target_percent}% target")
+        
+        # Always queue impacts, never apply them immediately
+        if not hasattr(self, 'pending_impacts'):
+            self.pending_impacts = []
+        
+        # Store the impact for later application when session starts/is active
+        self.pending_impacts.append((stocks, target_percent, duration))
+        
+        # Show message indicating it's queued
+        if not self.session_active:
+            logger.info(f"Impact for {stocks} queued for when session starts")
+        else:
+            logger.info(f"Impact for {stocks} queued for immediate processing")
             
+        # IMPORTANT: Do NOT call _apply_queued_impact here!
+
+    def _apply_queued_impact(self, stocks, target_percent, duration=None):
+        """Set up the impact with 10-minute duration"""
+        if not self.session_active:
+            return
+        
         for stock in stocks:
+            current_price = market_state.stock_prices[stock]
+            # Calculate exact target price from percentage
+            target_price = current_price * (1 + (target_percent / 100.0))
+            
             self.news_impacts[stock] = {
                 'target_percent': target_percent,
-                'start_price': market_state.stock_prices[stock],
-                'remaining_time': duration,
-                'total_time': duration,
-                'current_progress': 0.0
+                'start_price': current_price,
+                'target_price': target_price
             }
-        logger.info(f"Added news impact target: {stocks} -> {target_percent}% over {duration}s")
+            
+            logger.info(f"Impact registered for {stock}:")
+            logger.info(f"  Start: ${current_price:.2f}")
+            logger.info(f"  Target: ${target_price:.2f} ({target_percent:+.1f}%)")
+            logger.info(f"  Duration: 10 minutes")
+
+    def _process_pending_impacts(self):
+        """Process pending impacts after session has fully started"""
+        if not self.session_active:
+            logger.warning("Cannot process impacts - session not active")
+            return
+            
+        if hasattr(self, 'pending_impacts') and self.pending_impacts:
+            pending_count = len(self.pending_impacts)
+            logger.info(f"Processing {pending_count} queued news impacts now that session is active")
+            
+            # Make a copy of the queue to process
+            impacts_to_process = self.pending_impacts.copy()
+            # Clear the queue before processing
+            self.pending_impacts = []
+            
+            # Process each impact
+            for impact in impacts_to_process:
+                stocks, target_percent, duration = impact
+                self._apply_queued_impact(stocks, target_percent, duration)
 
 def admin_place_order(team_id, stock, quantity, order_type, admin_key=None):
     """Process admin-placed orders for teams with admin validation"""

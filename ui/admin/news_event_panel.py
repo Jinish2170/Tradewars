@@ -123,29 +123,34 @@ class NewsEventPanel(QWidget):
         self.selected_label.setText(text)
 
     def inject_event(self):
-        """Inject the news event into the market"""
+        """Inject the news event into the market with percentage directly passed"""
         selected_stocks = list(self.selected_stocks)
         if not selected_stocks:
             self.log_event("Error: No stocks selected")
             return
 
+        # Get the target percentage exactly as shown in UI
         impact_percent = self.impact_spinner.value()
         
-        # Add the news impact to market session
+        # Pass EXACTLY the percentage value to the market session
+        # We don't convert to decimal here - let the simulation handle that
         market_session.add_news_impact(selected_stocks, impact_percent)
         
+        # Here we convert to decimal for the event_data structure
         event_data = {
             'title': self.event_title.text(),
             'description': self.description.toPlainText(),
             'stocks': selected_stocks,
-            'impact': impact_percent / 100.0
+            'impact': impact_percent / 100.0  # Convert to decimal for event data
         }
-
-        # Now market_simulation will be defined
+        
+        # Log detailed info for debugging
+        self.log_event(f"Event Injected: {event_data['title']}")
+        self.log_event(f"Target Impact: {impact_percent:+.1f}% on {', '.join(selected_stocks)}")
+        self.log_event(f"Impact will be enforced EXACTLY at session end")
+        
         market_simulation.inject_news_event(event_data)
-        self.log_event(f"Event Injected: {event_data['title']} "
-                      f"(Target Impact: {impact_percent:+.1f}% on {', '.join(selected_stocks)})")
-
+        
         # Clear selections after injection
         self.stock_list.clearSelection()
         self.selected_stocks.clear()

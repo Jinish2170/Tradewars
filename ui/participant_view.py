@@ -30,7 +30,14 @@ THEME = {
     'neutral': '#9E9E9E',
     'header': '#252525',
     'chart_grid': '#333333',
-    'selection': '#2C5282'
+    'selection': '#2C5282',
+    # Add font size definitions
+    'font_small': '16px',    # Was ~8px
+    'font_normal': '18px',   # Was ~9px
+    'font_medium': '22px',   # Was ~11px
+    'font_large': '28px',    # Was ~14px
+    'font_xlarge': '36px',   # Was ~18px
+    'font_xxlarge': '48px'   # Was ~24px
 }
 
 # Modern card style with border radius and subtle shadows
@@ -39,6 +46,7 @@ QFrame.Card {{
     background-color: {THEME['card']};
     border: 1px solid {THEME['border']};
     border-radius: 8px;
+    font-size: {THEME['font_normal']};  /* Added base font size */
 }}
 """
 
@@ -53,10 +61,11 @@ QTableWidget {{
     border-radius: 4px;
     selection-background-color: {THEME['selection']};
     selection-color: {THEME['text']};
+    font-size: {THEME['font_normal']};  /* Increased font size */
 }}
 
 QTableWidget::item {{
-    padding: 8px;
+    padding: 12px;  /* Increased padding for larger text */
     border-bottom: 1px solid {THEME['border']};
 }}
 
@@ -64,7 +73,8 @@ QHeaderView::section {{
     background-color: {THEME['header']};
     color: {THEME['text_secondary']};
     font-weight: bold;
-    padding: 8px;
+    font-size: {THEME['font_medium']};  /* Larger header font */
+    padding: 12px;  /* More padding for headers */
     border: none;
     border-bottom: 1px solid {THEME['border']};
 }}
@@ -100,36 +110,36 @@ class ModernPriceWidget(QFrame):
         layout.setContentsMargins(15, 10, 15, 10)
         layout.setSpacing(5)
         
-        # Symbol row with icon
+        # Symbol row with icon - increase font sizes
         symbol_row = QHBoxLayout()
         self.symbol_label = QLabel(self.symbol)
-        self.symbol_label.setStyleSheet(f"color: {THEME['text']}; font-weight: bold; font-size: 14px;")
+        self.symbol_label.setStyleSheet(f"color: {THEME['text']}; font-weight: bold; font-size: {THEME['font_large']};")
         
         self.trend_icon = QLabel()
-        self.trend_icon.setFixedSize(16, 16)
-        self.trend_icon.setStyleSheet(f"color: {THEME['positive']};")
+        self.trend_icon.setFixedSize(24, 24)  # Increased from 16,16
+        self.trend_icon.setStyleSheet(f"color: {THEME['positive']}; font-size: {THEME['font_large']};")
         
         symbol_row.addWidget(self.symbol_label)
         symbol_row.addStretch()
         symbol_row.addWidget(self.trend_icon)
         
-        # Price row with large font
+        # Price row with much larger font
         price_row = QHBoxLayout()
         self.price_label = QLabel("$0.00")
-        self.price_label.setStyleSheet(f"color: {THEME['text']}; font-weight: bold; font-size: 24px;")
+        self.price_label.setStyleSheet(f"color: {THEME['text']}; font-weight: bold; font-size: {THEME['font_xxlarge']};")
         
         self.change_label = QLabel("0.00%")
-        self.change_label.setStyleSheet(f"color: {THEME['positive']}; font-size: 14px;")
+        self.change_label.setStyleSheet(f"color: {THEME['positive']}; font-size: {THEME['font_medium']};")
         self.change_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         
         price_row.addWidget(self.price_label)
         price_row.addStretch()
         price_row.addWidget(self.change_label)
         
-        # Volume row
+        # Volume row - larger text
         volume_row = QHBoxLayout()
         self.volume_label = QLabel("Volume: 0")
-        self.volume_label.setStyleSheet(f"color: {THEME['text_secondary']}; font-size: 12px;")
+        self.volume_label.setStyleSheet(f"color: {THEME['text_secondary']}; font-size: {THEME['font_normal']};")
         volume_row.addWidget(self.volume_label)
         
         layout.addLayout(symbol_row)
@@ -149,19 +159,19 @@ class ModernPriceWidget(QFrame):
         volume_str = f"Volume: {volume:,}"
         self.volume_label.setText(volume_str)
         
-        # Update trend icon
+        # Update trend icon with larger font
         if new_price > self.last_price:
             self.trend_icon.setText("▲")
-            self.trend_icon.setStyleSheet(f"color: {THEME['positive']}; font-size: 14px;")
-            self.change_label.setStyleSheet(f"color: {THEME['positive']}; font-size: 14px;")
+            self.trend_icon.setStyleSheet(f"color: {THEME['positive']}; font-size: {THEME['font_large']};")
+            self.change_label.setStyleSheet(f"color: {THEME['positive']}; font-size: {THEME['font_medium']};")
         elif new_price < self.last_price:
             self.trend_icon.setText("▼")
-            self.trend_icon.setStyleSheet(f"color: {THEME['negative']}; font-size: 14px;")
-            self.change_label.setStyleSheet(f"color: {THEME['negative']}; font-size: 14px;")
+            self.trend_icon.setStyleSheet(f"color: {THEME['negative']}; font-size: {THEME['font_large']};")
+            self.change_label.setStyleSheet(f"color: {THEME['negative']}; font-size: {THEME['font_medium']};")
         else:
             self.trend_icon.setText("■")
-            self.trend_icon.setStyleSheet(f"color: {THEME['neutral']}; font-size: 14px;")
-            self.change_label.setStyleSheet(f"color: {THEME['neutral']}; font-size: 14px;")
+            self.trend_icon.setStyleSheet(f"color: {THEME['neutral']}; font-size: {THEME['font_large']};")
+            self.change_label.setStyleSheet(f"color: {THEME['neutral']}; font-size: {THEME['font_medium']};")
         
         # Add animation effect for price changes
         if self.last_price != 0 and new_price != self.last_price:
@@ -208,13 +218,13 @@ class MarketStatusBar(QFrame):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(15, 0, 15, 0)
         
-        # Status indicator
+        # Status indicator with larger symbols and text
         status_layout = QHBoxLayout()
         self.status_indicator = QLabel("●")
-        self.status_indicator.setStyleSheet(f"color: {THEME['positive']}; font-size: 16px;")
+        self.status_indicator.setStyleSheet(f"color: {THEME['positive']}; font-size: {THEME['font_large']};")
         
         self.status_text = QLabel("Market Open")
-        self.status_text.setStyleSheet(f"color: {THEME['text']}; font-weight: bold;")
+        self.status_text.setStyleSheet(f"color: {THEME['text']}; font-weight: bold; font-size: {THEME['font_medium']};")
         
         status_layout.addWidget(self.status_indicator)
         status_layout.addWidget(self.status_text)
@@ -222,11 +232,11 @@ class MarketStatusBar(QFrame):
         
         # Session info
         self.session_label = QLabel("Session 1 of 5")
-        self.session_label.setStyleSheet(f"color: {THEME['text_secondary']};")
+        self.session_label.setStyleSheet(f"color: {THEME['text_secondary']}; font-size: {THEME['font_medium']};")
         
         # Market time
         self.time_label = QLabel(time.strftime("%H:%M:%S"))
-        self.time_label.setStyleSheet(f"color: {THEME['text_secondary']};")
+        self.time_label.setStyleSheet(f"color: {THEME['text_secondary']}; font-size: {THEME['font_medium']};")
         
         # Add all components to main layout
         layout.addLayout(status_layout)
@@ -244,10 +254,10 @@ class MarketStatusBar(QFrame):
         
     def set_status(self, is_open, session_info="Session 1 of 5"):
         if is_open:
-            self.status_indicator.setStyleSheet(f"color: {THEME['positive']}; font-size: 16px;")
+            self.status_indicator.setStyleSheet(f"color: {THEME['positive']}; font-size: {THEME['font_large']};")
             self.status_text.setText("Market Open")
         else:
-            self.status_indicator.setStyleSheet(f"color: {THEME['negative']}; font-size: 16px;")
+            self.status_indicator.setStyleSheet(f"color: {THEME['negative']}; font-size: {THEME['font_large']};")
             self.status_text.setText("Market Closed")
             
         self.session_label.setText(session_info)
@@ -268,13 +278,13 @@ class SummaryCard(QFrame):
         layout.setContentsMargins(15, 12, 15, 12)
         layout.setSpacing(5)
         
-        # Title label
+        # Title label with larger font
         self.title_label = QLabel(title)
-        self.title_label.setStyleSheet(f"color: {THEME['text_secondary']}; font-size: 12px;")
+        self.title_label.setStyleSheet(f"color: {THEME['text_secondary']}; font-size: {THEME['font_normal']};")
         
-        # Value with large font
+        # Value with extra large font
         self.value_label = QLabel(value)
-        self.value_label.setStyleSheet(f"color: {color}; font-size: 22px; font-weight: bold;")
+        self.value_label.setStyleSheet(f"color: {color}; font-size: {THEME['font_xlarge']}; font-weight: bold;")
         
         layout.addWidget(self.title_label)
         layout.addWidget(self.value_label)
@@ -282,7 +292,7 @@ class SummaryCard(QFrame):
     def update_value(self, new_value, color=None):
         self.value_label.setText(new_value)
         if color:
-            self.value_label.setStyleSheet(f"color: {color}; font-size: 22px; font-weight: bold;")
+            self.value_label.setStyleSheet(f"color: {color}; font-size: {THEME['font_xlarge']}; font-weight: bold;")
 
 class ParticipantView(QWidget):
     def __init__(self):
@@ -294,6 +304,20 @@ class ParticipantView(QWidget):
         self.setupTimers()
         
     def setupUI(self):
+        # Make the app use our larger fonts globally
+        self.setStyleSheet(f"""
+            * {{
+                font-size: {THEME['font_normal']};
+            }}
+            QLabel {{
+                font-size: {THEME['font_medium']};
+            }}
+            QPushButton {{
+                font-size: {THEME['font_normal']};
+                padding: 8px 16px;
+            }}
+        """)
+        
         # Set main layout
         self.setStyleSheet(f"background-color: {THEME['background']};")
         main_layout = QVBoxLayout(self)
@@ -304,7 +328,7 @@ class ParticipantView(QWidget):
         self.status_bar = MarketStatusBar()
         main_layout.addWidget(self.status_bar)
         
-        # Price tickers
+        # Price tickers - increase size
         price_section = QFrame()
         price_section.setStyleSheet(CARD_STYLE)
         price_section.setObjectName("Card")
@@ -313,10 +337,10 @@ class ParticipantView(QWidget):
         price_layout = QVBoxLayout(price_section)
         price_layout.setContentsMargins(15, 10, 15, 10)
         
-        # Header
+        # Header with larger text
         header_layout = QHBoxLayout()
         header_label = QLabel("Market Prices")
-        header_label.setStyleSheet(f"color: {THEME['text']}; font-size: 16px; font-weight: bold;")
+        header_label.setStyleSheet(f"color: {THEME['text']}; font-size: {THEME['font_large']}; font-weight: bold;")
         header_layout.addWidget(header_label)
         
         price_layout.addLayout(header_layout)
@@ -328,7 +352,7 @@ class ParticipantView(QWidget):
         scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll_area.setStyleSheet("background: transparent; border: none;")
-        scroll_area.setFixedHeight(100)
+        scroll_area.setFixedHeight(150)  # Increased from 100
         
         scroll_widget = QWidget()
         self.ticker_layout = QHBoxLayout(scroll_widget)
@@ -341,7 +365,7 @@ class ParticipantView(QWidget):
         
         main_layout.addWidget(price_section)
         
-        # Main content area with tabs
+        # Main content area with larger tab text
         content_tabs = QTabWidget()
         content_tabs.setStyleSheet(f"""
             QTabWidget::pane {{
@@ -353,8 +377,8 @@ class ParticipantView(QWidget):
                 background-color: {THEME['header']};
                 color: {THEME['text_secondary']};
                 border: none;
-                padding: 10px 20px;
-                font-size: 14px;
+                padding: 12px 24px;  /* Increased padding */
+                font-size: {THEME['font_medium']};  /* Larger font */
             }}
             QTabBar::tab:selected {{
                 background-color: {THEME['card']};
@@ -382,6 +406,7 @@ class ParticipantView(QWidget):
         self.market_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.market_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.market_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.market_table.verticalHeader().setDefaultSectionSize(48)  # Increased from 30
         
         market_tab_layout.addWidget(self.market_table)
         
@@ -400,10 +425,10 @@ class ParticipantView(QWidget):
         teams_layout.setContentsMargins(15, 12, 15, 12)
         teams_layout.setSpacing(8)  # Reduced spacing inside frame
         
-        # Teams header
+        # Teams header with larger text
         teams_header = QHBoxLayout()
         teams_title = QLabel("Team Rankings")
-        teams_title.setStyleSheet(f"color: {THEME['text']}; font-size: 16px; font-weight: bold;")
+        teams_title.setStyleSheet(f"color: {THEME['text']}; font-size: {THEME['font_large']}; font-weight: bold;")
         teams_header.addWidget(teams_title)
         teams_layout.addLayout(teams_header)
         
@@ -415,7 +440,7 @@ class ParticipantView(QWidget):
         self.teams_table.setAlternatingRowColors(True)
         self.teams_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.teams_table.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.teams_table.verticalHeader().setDefaultSectionSize(30)  # Optimize row height
+        self.teams_table.verticalHeader().setDefaultSectionSize(48)   # Increased from 30
         self.teams_table.setMinimumHeight(400)  # Give enough space for all teams
         
         teams_layout.addWidget(self.teams_table)
@@ -424,12 +449,12 @@ class ParticipantView(QWidget):
         log_layout = QVBoxLayout()
         log_layout.setSpacing(4)  # Reduced spacing
         log_title = QLabel("Recent Market Activity")
-        log_title.setStyleSheet(f"color: {THEME['text']}; font-size: 16px; font-weight: bold;")
+        log_title.setStyleSheet(f"color: {THEME['text']}; font-size: {THEME['font_large']}; font-weight: bold;")
         log_layout.addWidget(log_title)
         
         self.market_log = QTextEdit()
         self.market_log.setReadOnly(True)
-        self.market_log.setFixedHeight(100)  # Reduced height
+        self.market_log.setFixedHeight(120)  # Increased from 100
         self.market_log.setStyleSheet(f"""
             QTextEdit {{
                 background-color: {THEME['header']};
@@ -437,7 +462,8 @@ class ParticipantView(QWidget):
                 border: none;
                 border-radius: 4px;
                 font-family: monospace;
-                padding: 8px;
+                font-size: {THEME['font_normal']};  /* Larger text */
+                padding: 10px;
             }}
         """)
         log_layout.addWidget(self.market_log)
@@ -453,17 +479,17 @@ class ParticipantView(QWidget):
         
         # News ticker at bottom
         news_ticker = QFrame()
-        news_ticker.setFixedHeight(30)
+        news_ticker.setFixedHeight(42)  # Increased from 30
         news_ticker.setStyleSheet(f"background-color: {THEME['header']}; border-radius: 4px;")
         
         news_layout = QHBoxLayout(news_ticker)
         news_layout.setContentsMargins(15, 0, 15, 0)
         
         news_icon = QLabel("📢")
-        news_icon.setStyleSheet(f"color: {THEME['accent']}; font-size: 16px;")
+        news_icon.setStyleSheet(f"color: {THEME['accent']}; font-size: {THEME['font_large']};")
         
         self.news_label = QLabel("Welcome to the Trading Simulation!")
-        self.news_label.setStyleSheet(f"color: {THEME['text']}; font-weight: bold;")
+        self.news_label.setStyleSheet(f"color: {THEME['text']}; font-weight: bold; font-size: {THEME['font_medium']};")
         
         news_layout.addWidget(news_icon)
         news_layout.addWidget(self.news_label)
@@ -562,6 +588,10 @@ class ParticipantView(QWidget):
             self.market_table.setItem(row, 3, trend_item)
             self.market_table.setItem(row, 4, volume_item)
             self.market_table.setItem(row, 5, available_item)
+        
+        # Adjust table column width to fit larger text
+        self.market_table.resizeColumnsToContents()
+        self.market_table.resizeRowsToContents()
     
     def update_team_performance(self):
         """Update team performance data"""
@@ -640,6 +670,10 @@ class ParticipantView(QWidget):
             # Update market activity log with recent transactions
             self.update_market_activity_log()
             
+            # Make sure the team rankings table adjusts to larger text
+            self.teams_table.resizeColumnsToContents()
+            self.teams_table.resizeRowsToContents()
+            
         except Exception as e:
             logger.error(f"Error updating team performance: {str(e)}")
             self.market_log.append(f"Error updating performance data: {str(e)}")
@@ -687,6 +721,9 @@ class ParticipantView(QWidget):
                 # Only add if not already in log
                 if log_entry not in current_log:
                     self.market_log.append(log_entry)
+                    
+            # Add special handling for the log to ensure text is properly visible
+            self.market_log.setFontPointSize(12)  # Set explicit point size for log text
                     
         except Exception as e:
             logger.error(f"Error updating market activity log: {str(e)}"
